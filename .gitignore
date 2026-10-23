@@ -1,0 +1,16 @@
+# Build output
+build/
+bin/
+*.o
+*.d
+*.dSYM/
+
+# Benchmark output (regenerate with `make bench`)
+results/*.log
+results/raw/
+
+# Editors / OS
+.DS_Store
+.vscode/
+.idea/
+__pycache__/
