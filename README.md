@@ -11,6 +11,16 @@ SafeServe is a multi-threaded HTTP/1.1 server in C11 with POSIX threads. Every r
 
 Built as an Operating Systems course project. Design: [`docs/EDD.md`](docs/EDD.md). Requirements: [`docs/PRD.md`](docs/PRD.md). Results and discussion: [`docs/REPORT.md`](docs/REPORT.md).
 
+## Results at a glance
+
+![Benchmark: goodput, p99 latency and failure rate per strategy](results/bench.png)
+
+* **naive** freezes completely as soon as the workload contains conflicting requests.
+* **banker** never deadlocks and has the best tail latency of the incremental strategies. It costs 5–24% throughput compared with lock ordering.
+* **detect** survives, but loses up to half its requests to aborted victims.
+
+Numbers, method and discussion: [`docs/REPORT.md`](docs/REPORT.md). Guided code tour: [`docs/WALKTHROUGH.md`](docs/WALKTHROUGH.md). Demo video: [`docs/demo/safeserve-demo.mp4`](docs/demo/safeserve-demo.mp4).
+
 ## Quickstart
 
 ```bash

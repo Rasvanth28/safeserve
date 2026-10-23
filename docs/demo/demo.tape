@@ -2,7 +2,6 @@
 # (requires https://github.com/charmbracelet/vhs; run from the repo root after `make`)
 
 Output docs/demo/safeserve-demo.mp4
-Output docs/demo/safeserve-demo.gif
 
 Set Shell "bash"
 Set FontSize 15
@@ -33,7 +32,7 @@ Type "clear" Enter
 Type "# 1) Test suite: textbook cases, brute-force property test, every mode, stress" Enter
 Sleep 1s
 Type "make test 2>&1 | grep -E 'PASS|stress\]|passed'" Enter
-Sleep 30s
+Sleep 34s
 Type "clear" Enter
 
 # --- 3. In-process demo ----------------------------------------------------
@@ -54,17 +53,17 @@ Type "clear" Enter
 Type "# 3) The real HTTP server: fire 2 uploads + 4 refreshes at the same moment" Enter
 Sleep 1s
 Type "MODES='naive banker' ./tools/deadlock_demo.sh" Enter
-Sleep 14s
+Sleep 12s
 Type "clear" Enter
 
 Type "# Live metrics while the server runs" Enter
-Type "./bin/safeserve --mode banker --port 8080 --quiet >/dev/null & sleep 0.5" Enter
+Type "./bin/safeserve --mode banker --port 8080 --quiet >/dev/null & SERVER=$!; sleep 0.5" Enter
 Sleep 1s
-Type "for i in 1 2 3 4; do curl -s -o /dev/null -X POST localhost:8080/refresh & curl -s -o /dev/null -X POST -d x localhost:8080/upload & done; wait" Enter
+Type "for i in 1 2 3 4; do curl -s -o /dev/null -X POST localhost:8080/refresh & curl -s -o /dev/null -X POST -d x localhost:8080/upload & done 2>/dev/null; sleep 1" Enter
 Sleep 2s
 Type "curl -s localhost:8080/metrics | head -32" Enter
 Sleep 7s
-Type "kill -INT %1; wait 2>/dev/null; clear" Enter
+Type "kill -INT $SERVER; wait $SERVER 2>/dev/null; clear" Enter
 Sleep 1s
 
 # --- 5. Benchmark results --------------------------------------------------
