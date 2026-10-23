@@ -2,8 +2,8 @@
 
 **Project:** SafeServe, a multi-threaded web server with deadlock-safe admission control
 **Course:** Operating Systems project
-**Status:** Draft v1.0
-**Last updated:** 2026-10-21
+**Status:** v1.1 (implemented)
+**Last updated:** 2026-10-23
 
 ---
 
@@ -184,6 +184,6 @@ The project is accepted when:
 
 ## 15. Open Questions
 
-1. Final team size and deadline (affects stretch goals).
-2. Which admission mode is the default: atomic reservation or incremental?
-3. Should the DB be a real SQLite file or a simulated resource with artificial delay?
+1. Final team size and deadline (affects stretch goals). *Open.*
+2. Which admission mode is the default? **Resolved: incremental.** Atomic reservation removes hold-and-wait, so it cannot show the difference between strategies. See EDD §17.
+3. Real SQLite or simulated DB? **Resolved: simulated** with a configurable delay.

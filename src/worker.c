@@ -6,6 +6,7 @@
 #include "handlers.h"
 #include "metrics.h"
 #include "log.h"
+#include "util.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -14,103 +15,104 @@
 #include <sys/socket.h>
 #include <time.h>
 
-static double timespec_diff_ms(const struct timespec *start, const struct timespec *end) {
-    return (end->tv_sec - start->tv_sec) * 1000.0 + (end->tv_nsec - start->tv_nsec) / 1000000.0;
+// Runs admission control and the handler for one parsed request.
+// Returns the HTTP status sent and fills *admit_ms.
+static int serve_request(server_context_t *ctx, int fd, const http_request_t *req, double *admit_ms) {
+    *admit_ms = 0.0;
+
+    const route_t *route = handlers_find_route(req->path);
+    if (!route) {
+        return send_error(fd, 404, NULL);
+    }
+    if (!(route->methods & METHOD_BIT(req->method))) {
+        char allow[64];
+        snprintf(allow, sizeof(allow), "Allow: %s\r\n", route->allow);
+        const char *body = "405 Method Not Allowed\n";
+        http_send_response_ex(fd, 405, "text/plain; charset=utf-8", body, strlen(body), allow);
+        return 405;
+    }
+
+    int claim[M_MAX];
+    config_get_route_claim(&ctx->cfg.resources, route->claim_path ? route->claim_path : req->path, claim);
+    bool zero_claim = true;
+    for (int j = 0; j < ctx->cfg.resources.m; j++) {
+        if (claim[j] > 0) zero_claim = false;
+    }
+
+    // Zero-claim routes (/health, /metrics) bypass the resource manager so
+    // they stay responsive even when every resource is held (EDD §16).
+    if (zero_claim) {
+        return route->fn(fd, req, &ctx->cfg, -1);
+    }
+
+    int slot = rm_alloc_slot();
+    if (slot < 0) {
+        return send_error(fd, 503, "request slots exhausted");
+    }
+    if (rm_register_claim(slot, claim) != RM_SUCCESS) {
+        rm_free_slot(slot);
+        return send_error(fd, 500, "route claim exceeds system capacity");
+    }
+
+    struct timespec t0, t1;
+    clock_gettime(CLOCK_MONOTONIC, &t0);
+    int status;
+    if (ctx->cfg.admit_mode == ADMIT_ATOMIC) {
+        // Reserve the whole claim up front; the handler then runs with
+        // everything it needs (no hold-and-wait).
+        int rc = rm_acquire_vec(slot, claim, ctx->cfg.admit_timeout_ms);
+        clock_gettime(CLOCK_MONOTONIC, &t1);
+        status = (rc == RM_SUCCESS) ? route->fn(fd, req, &ctx->cfg, slot) : send_rm_failure(fd, rc);
+    } else {
+        // Incremental: the handler acquires step by step, so admission wait
+        // is part of the handler time.
+        status = route->fn(fd, req, &ctx->cfg, slot);
+        clock_gettime(CLOCK_MONOTONIC, &t1);
+    }
+    *admit_ms = timespec_diff_ms(&t0, &t1);
+
+    rm_free_slot(slot);
+    return status;
 }
 
 static void *worker_thread_fn(void *arg) {
     server_context_t *ctx = (server_context_t *)arg;
 
-    char recv_buf[HTTP_MAX_HEADER_SIZE + 4096];
-
-    while (ctx->running) {
-        job_t job;
-        if (!queue_pop(&ctx->queue, &job)) {
-            break; // Queue closed on shutdown
-        }
-
+    job_t job;
+    while (queue_pop(&ctx->queue, &job)) {
         struct timespec t_pop;
         clock_gettime(CLOCK_MONOTONIC, &t_pop);
         double queue_ms = timespec_diff_ms(&job.t_accept, &t_pop);
 
-        // Receive request
-        ssize_t nread = recv(job.client_fd, recv_buf, sizeof(recv_buf) - 1, 0);
-        if (nread <= 0) {
-            close(job.client_fd);
-            continue;
-        }
-        recv_buf[nread] = '\0';
-
         http_request_t req;
-        int parse_rc = http_parse_request(recv_buf, nread, &req);
-        if (parse_rc != 0) {
-            const char *err = "400 Bad Request\n";
-            http_send_response(job.client_fd, 400, "text/plain", err, strlen(err), 0);
-            metrics_inc_status(400);
-            close(job.client_fd);
-            continue;
-        }
+        int read_rc = http_read_request(job.client_fd, &req);
+        int status;
+        double admit_ms = 0.0;
 
-        // Allocate RM slot
-        int slot = rm_alloc_slot();
-        if (slot < 0) {
-            const char *err = "503 Service Unavailable (Slot Pool Exhausted)\n";
-            http_send_response(job.client_fd, 503, "text/plain", err, strlen(err), 1);
-            metrics_inc_status(503);
-            metrics_inc_admission_timeout();
+        if (read_rc < 0) {
+            // Peer closed or reset before sending a request.
             http_free_request(&req);
             close(job.client_fd);
             continue;
+        } else if (read_rc > 0) {
+            status = send_error(job.client_fd, read_rc, NULL);
+        } else if (ctx->cfg.queue_timeout_ms > 0 && queue_ms > ctx->cfg.queue_timeout_ms) {
+            // Overloaded: the client has probably given up already. Shedding
+            // stale work keeps latency bounded; serving abandoned requests
+            // would let goodput collapse to zero.
+            status = send_error(job.client_fd, 503, "queue wait exceeded");
+            metrics_inc_queue_timeout();
+        } else {
+            status = serve_request(ctx, job.client_fd, &req, &admit_ms);
         }
-
-        // Register route claim
-        int claim[M_MAX];
-        config_get_route_claim(&ctx->cfg.resources, req.path, claim);
-        rm_register_claim(slot, claim);
-
-        // Admission check / reservation
-        struct timespec t_admit_start, t_admit_end;
-        clock_gettime(CLOCK_MONOTONIC, &t_admit_start);
-
-        int admit_rc = rm_acquire_atomic(slot, claim, ctx->cfg.admit_timeout_ms);
-
-        clock_gettime(CLOCK_MONOTONIC, &t_admit_end);
-        double admit_ms = timespec_diff_ms(&t_admit_start, &t_admit_end);
-
-        if (admit_rc == RM_TIMEOUT) {
-            const char *err = "503 Service Unavailable (Admission Timeout)\n";
-            http_send_response(job.client_fd, 503, "text/plain", err, strlen(err), 1);
-            metrics_inc_status(503);
-            log_request(req.path, 503, queue_ms + admit_ms, queue_ms, admit_ms, strlen(err));
-            rm_free_slot(slot);
-            http_free_request(&req);
-            close(job.client_fd);
-            continue;
-        } else if (admit_rc != RM_SUCCESS) {
-            const char *err = "500 Internal Server Error (Admission Aborted)\n";
-            http_send_response(job.client_fd, 500, "text/plain", err, strlen(err), 0);
-            metrics_inc_status(500);
-            rm_free_slot(slot);
-            http_free_request(&req);
-            close(job.client_fd);
-            continue;
-        }
-
-        // Execute request handler
-        metrics_inc_requests();
-        handle_request(job.client_fd, &req, &ctx->cfg, slot);
-        metrics_inc_status(200);
-
-        // Release allocated resources
-        rm_release_all(slot);
-        rm_free_slot(slot);
 
         struct timespec t_end;
         clock_gettime(CLOCK_MONOTONIC, &t_end);
         double total_ms = timespec_diff_ms(&job.t_accept, &t_end);
 
+        metrics_inc_status(status);
         metrics_record_latency(total_ms);
-        log_request(req.path, 200, total_ms, queue_ms, admit_ms, 0);
+        log_request(read_rc == 0 ? req.path : "-", status, total_ms, queue_ms, admit_ms, req.body_len);
 
         http_free_request(&req);
         close(job.client_fd);
@@ -123,13 +125,13 @@ int worker_pool_start(server_context_t *ctx) {
     if (!ctx) return -1;
 
     ctx->num_workers = ctx->cfg.workers > 0 ? ctx->cfg.workers : 16;
-    ctx->worker_threads = malloc(sizeof(pthread_t) * ctx->num_workers);
+    ctx->worker_threads = malloc(sizeof(pthread_t) * (size_t)ctx->num_workers);
     if (!ctx->worker_threads) return -1;
 
-    ctx->running = true;
     for (int i = 0; i < ctx->num_workers; i++) {
         if (pthread_create(&ctx->worker_threads[i], NULL, worker_thread_fn, ctx) != 0) {
             LOG_E("Failed to spawn worker thread %d", i);
+            ctx->num_workers = i;
             return -1;
         }
     }
@@ -141,7 +143,6 @@ int worker_pool_start(server_context_t *ctx) {
 void worker_pool_stop(server_context_t *ctx) {
     if (!ctx || !ctx->worker_threads) return;
 
-    ctx->running = false;
     queue_close(&ctx->queue);
 
     for (int i = 0; i < ctx->num_workers; i++) {
@@ -150,5 +151,5 @@ void worker_pool_stop(server_context_t *ctx) {
 
     free(ctx->worker_threads);
     ctx->worker_threads = NULL;
-    LOG_I("All worker threads joined successfully");
+    LOG_I("All worker threads joined");
 }

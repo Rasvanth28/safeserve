@@ -10,6 +10,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <sys/time.h>
 
 int net_listen(int port, int backlog) {
     int sock_fd = socket(AF_INET, SOCK_STREAM, 0);

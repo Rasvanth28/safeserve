@@ -1,75 +1,90 @@
-CC ?= gcc
-CFLAGS ?= -std=c11 -Wall -Wextra -Werror -O2 -g -pthread -Iinclude
-LDFLAGS ?= -pthread
+# SafeServe build
+#
+#   make              build bin/safeserve and bin/loadgen
+#   make test         unit, property and concurrency tests
+#   make e2e          start the server and test it over HTTP
+#   make demo         in-process deadlock demo: same workload under all four modes
+#   make demo-live    the same demo against the real HTTP server
+#   make bench        benchmark sweep -> results/bench.csv (see tools/bench.sh)
+#   make plot         charts from results/bench.csv
+#   make asan / tsan  tests under AddressSanitizer / ThreadSanitizer
+#
+# Sanitizer builds go to their own directory (build-address/, build-thread/)
+# so they never mix objects with the normal build.
 
-BIN_DIR = bin
-SRC_DIR = src
-INC_DIR = include
-TEST_DIR = tests
+CC      ?= cc
+SAN     ?=
+CFLAGS  ?= -std=c11 -Wall -Wextra -Werror -O2 -g
+CFLAGS  += -pthread -Iinclude -MMD -MP
+LDFLAGS += -pthread
 
-SRCS = $(SRC_DIR)/config.c \
-       $(SRC_DIR)/log.c \
-       $(SRC_DIR)/net.c \
-       $(SRC_DIR)/http.c \
-       $(SRC_DIR)/queue.c \
-       $(SRC_DIR)/banker.c \
-       $(SRC_DIR)/naive.c \
-       $(SRC_DIR)/lockorder.c \
-       $(SRC_DIR)/detect.c \
-       $(SRC_DIR)/rm.c \
-       $(SRC_DIR)/metrics.c \
-       $(SRC_DIR)/handlers.c \
-       $(SRC_DIR)/worker.c
+ifeq ($(SAN),)
+BUILD := build
+BIN   := bin
+else
+BUILD := build-$(SAN)
+BIN   := $(BUILD)/bin
+CFLAGS  += -fsanitize=$(SAN) -fno-omit-frame-pointer
+LDFLAGS += -fsanitize=$(SAN)
+endif
 
-OBJS = $(SRCS:.c=.o)
+CORE := config log net http queue banker naive lockorder detect rm metrics handlers worker
+CORE_OBJS := $(CORE:%=$(BUILD)/src/%.o)
 
-all: $(BIN_DIR)/safeserve
+TESTS := test_banker test_detect test_queue test_http test_modes test_rm_stress
+TEST_BINS := $(TESTS:%=$(BIN)/%)
 
-$(BIN_DIR):
-	mkdir -p $(BIN_DIR)
+all: $(BIN)/safeserve $(BIN)/loadgen
 
-$(SRC_DIR)/%.o: $(SRC_DIR)/%.c
+$(BUILD)/%.o: %.c
+	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(BIN_DIR)/safeserve: $(BIN_DIR) $(OBJS) $(SRC_DIR)/main.o
-	$(CC) $(CFLAGS) $(OBJS) $(SRC_DIR)/main.o -o $@ $(LDFLAGS)
+$(BIN):
+	mkdir -p $@
 
-# Tests
-$(BIN_DIR)/test_banker: $(BIN_DIR) $(SRC_DIR)/banker.o $(TEST_DIR)/test_banker.c
-	$(CC) $(CFLAGS) $(SRC_DIR)/banker.o $(TEST_DIR)/test_banker.c -o $@ $(LDFLAGS)
+$(BIN)/safeserve: $(CORE_OBJS) $(BUILD)/src/main.o | $(BIN)
+	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
 
-$(BIN_DIR)/test_queue: $(BIN_DIR) $(SRC_DIR)/queue.o $(TEST_DIR)/test_queue.c
-	$(CC) $(CFLAGS) $(SRC_DIR)/queue.o $(TEST_DIR)/test_queue.c -o $@ $(LDFLAGS)
+$(BIN)/loadgen: $(BUILD)/tools/loadgen.o | $(BIN)
+	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS) -lm
 
-$(BIN_DIR)/test_http: $(BIN_DIR) $(SRC_DIR)/http.o $(SRC_DIR)/log.o $(TEST_DIR)/test_http.c
-	$(CC) $(CFLAGS) $(SRC_DIR)/http.o $(SRC_DIR)/log.o $(TEST_DIR)/test_http.c -o $@ $(LDFLAGS)
+$(BIN)/demo_runner: $(CORE_OBJS) $(BUILD)/tools/demo_runner.o | $(BIN)
+	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
 
-$(BIN_DIR)/test_rm_stress: $(BIN_DIR) $(SRC_DIR)/rm.o $(SRC_DIR)/banker.o $(SRC_DIR)/naive.o $(SRC_DIR)/lockorder.o $(SRC_DIR)/detect.o $(SRC_DIR)/metrics.o $(SRC_DIR)/log.o $(TEST_DIR)/test_rm_stress.c
-	$(CC) $(CFLAGS) $(SRC_DIR)/rm.o $(SRC_DIR)/banker.o $(SRC_DIR)/naive.o $(SRC_DIR)/lockorder.o $(SRC_DIR)/detect.o $(SRC_DIR)/metrics.o $(SRC_DIR)/log.o $(TEST_DIR)/test_rm_stress.c -o $@ $(LDFLAGS)
+$(BIN)/test_%: $(CORE_OBJS) $(BUILD)/tests/test_%.o | $(BIN)
+	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
 
-$(BIN_DIR)/demo_runner: $(BIN_DIR) $(SRC_DIR)/rm.o $(SRC_DIR)/banker.o $(SRC_DIR)/naive.o $(SRC_DIR)/lockorder.o $(SRC_DIR)/detect.o $(SRC_DIR)/metrics.o $(SRC_DIR)/log.o tools/demo_runner.c
-	$(CC) $(CFLAGS) $(SRC_DIR)/rm.o $(SRC_DIR)/banker.o $(SRC_DIR)/naive.o $(SRC_DIR)/lockorder.o $(SRC_DIR)/detect.o $(SRC_DIR)/metrics.o $(SRC_DIR)/log.o tools/demo_runner.c -o $@ $(LDFLAGS)
+test: $(TEST_BINS)
+	@echo "=== Running unit, property and concurrency tests ==="
+	@set -e; for t in $(TEST_BINS); do echo "--- $$t"; ./$$t; done
+	@echo "=== All tests passed ==="
 
-test: $(BIN_DIR)/test_banker $(BIN_DIR)/test_queue $(BIN_DIR)/test_http $(BIN_DIR)/test_rm_stress
-	@echo "=== Running Unit & Stress Tests ==="
-	./$(BIN_DIR)/test_banker
-	./$(BIN_DIR)/test_queue
-	./$(BIN_DIR)/test_http
-	./$(BIN_DIR)/test_rm_stress
-	@echo "=== All Tests Passed Successfully ==="
+e2e: $(BIN)/safeserve
+	SAFESERVE=$(BIN)/safeserve ./tests/e2e.sh
 
-demo: $(BIN_DIR)/demo_runner
-	./$(BIN_DIR)/demo_runner
+demo: $(BIN)/demo_runner
+	./$(BIN)/demo_runner
 
-tsan: CFLAGS += -fsanitize=thread
-tsan: LDFLAGS += -fsanitize=thread
-tsan: clean all test
+demo-live: $(BIN)/safeserve
+	SAFESERVE=$(BIN)/safeserve ./tools/deadlock_demo.sh
 
-asan: CFLAGS += -fsanitize=address
-asan: LDFLAGS += -fsanitize=address
-asan: clean all test
+bench: $(BIN)/safeserve $(BIN)/loadgen
+	./tools/bench.sh
+
+plot:
+	python3 tools/plot.py
+
+asan:
+	$(MAKE) SAN=address test e2e
+
+tsan:
+	$(MAKE) SAN=thread test
 
 clean:
-	rm -rf $(BIN_DIR) $(SRC_DIR)/*.o $(TEST_DIR)/*.o
+	rm -rf build build-address build-thread build-undefined bin
 
-.PHONY: all test clean tsan asan
+.SECONDARY:
+.PHONY: all test e2e demo demo-live bench plot asan tsan clean
+
+-include $(shell find build build-* -name '*.d' 2>/dev/null)

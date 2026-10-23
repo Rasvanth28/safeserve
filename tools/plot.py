@@ -1,61 +1,140 @@
 #!/usr/bin/env python3
 """
-SafeServe Benchmark Plotting Tool
-Generates comparative performance visualizations across deadlock handling strategies.
+Plot SafeServe benchmark results.
+
+Reads the CSV written by tools/bench.sh (default results/bench.csv) and
+draws, per workload mix, goodput and p99 latency against concurrency for each
+strategy, plus the share of requests that failed (503, errors, timeouts).
+Repetitions of the same cell are summarised by their median, with min-max
+error bars.
+
+Nothing here is hard-coded: every number comes from the CSV.
+
+    python3 tools/plot.py [results/bench.csv] [results/bench.png]
+    python3 tools/plot.py --markdown [results/bench.csv]   # summary table only
 """
-
-import sys
+import csv
 import os
+import statistics
+import sys
+from collections import defaultdict
 
-try:
-    import matplotlib.pyplot as plt
-    import numpy as np
-except ImportError:
-    print("Warning: matplotlib or numpy not installed. Run 'pip install matplotlib numpy'.")
-    sys.exit(0)
+plt = None
 
-def generate_benchmark_plots(output_file="tools/benchmark_results.png"):
-    strategies = ["Naive", "Lock-Ordering", "Detection", "Banker's (SafeServe)"]
-    throughput_rps = [120, 2450, 1820, 2280]  # Requests per second (Naive drops due to stalls)
-    lat_p50 = [85.0, 4.2, 7.8, 5.1]          # Median latency (ms)
-    lat_p99 = [3200.0, 14.5, 95.0, 18.2]      # Tail p99 latency (ms)
 
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
+def need_matplotlib():
+    global plt
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as pyplot
+    except ImportError:
+        sys.exit("matplotlib is required: python3 -m pip install matplotlib")
+    plt = pyplot
 
-    # Plot 1: Throughput Comparison
-    colors = ['#e74c3c', '#2ecc71', '#f39c12', '#3498db']
-    bars = ax1.bar(strategies, throughput_rps, color=colors, width=0.55, edgecolor='black', linewidth=1.2)
-    ax1.set_title("Throughput Comparison (Mixed Workload)", fontsize=13, fontweight='bold')
-    ax1.set_ylabel("Throughput (Requests / sec)", fontsize=11)
-    ax1.set_ylim(0, 3000)
-    ax1.grid(axis='y', linestyle='--', alpha=0.7)
+ORDER = ["naive", "lockorder", "detect", "banker", "banker-atomic"]
+COLORS = {"naive": "#c0392b", "lockorder": "#27ae60", "detect": "#e67e22",
+          "banker": "#2e86c1", "banker-atomic": "#8e44ad"}
+MIX_ORDER = ["static", "balanced", "write"]
 
-    for bar in bars:
-        height = bar.get_height()
-        ax1.annotate(f'{height}',
-                     xy=(bar.get_x() + bar.get_width() / 2, height),
-                     xytext=(0, 4), textcoords="offset points",
-                     ha='center', va='bottom', fontweight='bold')
 
-    # Plot 2: Latency Percentiles (p50 vs p99)
-    x = np.arange(len(strategies))
-    width = 0.35
+def load(path):
+    cells = defaultdict(list)
+    with open(path, newline="") as f:
+        for row in csv.DictReader(f):
+            key = (row["label"], row["mix"], int(row["clients"]))
+            cells[key].append(row)
+    return cells
 
-    rects1 = ax2.bar(x - width/2, lat_p50, width, label='p50 Latency (ms)', color='#5dade2', edgecolor='black')
-    rects2 = ax2.bar(x + width/2, [min(val, 200) for val in lat_p99], width, label='p99 Latency (ms, capped)', color='#e67e22', edgecolor='black')
 
-    ax2.set_title("Latency Distribution (p50 vs p99)", fontsize=13, fontweight='bold')
-    ax2.set_ylabel("Latency (ms)", fontsize=11)
-    ax2.set_xticks(x)
-    ax2.set_xticklabels(strategies, rotation=10)
-    ax2.legend()
-    ax2.grid(axis='y', linestyle='--', alpha=0.7)
+def summarize(rows, field, transform=float):
+    vals = [transform(r[field]) for r in rows if r[field] not in ("", "nan")]
+    if not vals:
+        return float("nan"), 0.0, 0.0
+    med = statistics.median(vals)
+    return med, med - min(vals), max(vals) - med
 
-    plt.tight_layout()
-    os.makedirs(os.path.dirname(output_file), exist_ok=True)
-    plt.savefig(output_file, dpi=300)
-    print(f"Benchmark plot successfully saved to: {output_file}")
+
+def failure_share(r):
+    total = int(r["requests"])
+    bad = int(r["rejected_503"]) + int(r["other_errors"]) + int(r["timeouts"]) + int(r["conn_errors"])
+    return 100.0 * bad / total if total else 100.0
+
+
+def markdown_table(cells):
+    """Median over repetitions of each (strategy, mix, clients) cell."""
+    labels = [l for l in ORDER if any(k[0] == l for k in cells)]
+    mixes = [m for m in MIX_ORDER if any(k[1] == m for k in cells)]
+    print("| Mix | Clients | Strategy | Goodput (2xx/s) | p50 ms | p99 ms | Failed % | Timeouts |")
+    print("|---|---:|---|---:|---:|---:|---:|---:|")
+    for mix in mixes:
+        for clients in sorted({k[2] for k in cells if k[1] == mix}):
+            for label in labels:
+                rows = cells.get((label, mix, clients))
+                if not rows:
+                    continue
+                med = lambda f: summarize(rows, f)[0]
+                fail = statistics.median([failure_share(r) for r in rows])
+                tos = statistics.median([int(r["timeouts"]) for r in rows])
+                fmt = lambda v: "-" if v != v else f"{v:.0f}"
+                print(f"| {mix} | {clients} | {label} | {med('goodput_rps'):.1f} | {fmt(med('p50_ms'))} "
+                      f"| {fmt(med('p99_ms'))} | {fail:.0f} | {tos:.0f} |")
+
+
+def main():
+    if len(sys.argv) > 1 and sys.argv[1] == "--markdown":
+        src = sys.argv[2] if len(sys.argv) > 2 else "results/bench.csv"
+        markdown_table(load(src))
+        return
+    src = sys.argv[1] if len(sys.argv) > 1 else "results/bench.csv"
+    out = sys.argv[2] if len(sys.argv) > 2 else os.path.splitext(src)[0] + ".png"
+    if not os.path.exists(src):
+        sys.exit(f"{src} not found - run `make bench` first")
+
+    need_matplotlib()
+    cells = load(src)
+    labels = [l for l in ORDER if any(k[0] == l for k in cells)]
+    labels += sorted({k[0] for k in cells} - set(labels))
+    mixes = [m for m in MIX_ORDER if any(k[1] == m for k in cells)]
+
+    metrics = [
+        ("goodput_rps", "Goodput (2xx / s)", float, False),
+        ("p99_ms", "p99 latency (ms, log)", float, True),
+        (None, "Failed requests (%)", failure_share, False),
+    ]
+    fig, axes = plt.subplots(len(metrics), len(mixes), figsize=(5 * len(mixes), 3.6 * len(metrics)),
+                             squeeze=False)
+
+    for col, mix in enumerate(mixes):
+        for row, (field, title, fn, logy) in enumerate(metrics):
+            ax = axes[row][col]
+            for label in labels:
+                xs = sorted({k[2] for k in cells if k[0] == label and k[1] == mix})
+                if not xs:
+                    continue
+                ys, lo, hi = [], [], []
+                for x in xs:
+                    rows = cells[(label, mix, x)]
+                    if field is None:
+                        vals = [fn(r) for r in rows]
+                        med = statistics.median(vals)
+                        ys.append(med); lo.append(med - min(vals)); hi.append(max(vals) - med)
+                    else:
+                        m, l, h = summarize(rows, field, fn)
+                        ys.append(m); lo.append(l); hi.append(h)
+                ax.errorbar(xs, ys, yerr=[lo, hi], marker="o", capsize=3, label=label,
+                            color=COLORS.get(label))
+            ax.set_xscale("log")
+            if logy:
+                ax.set_yscale("log")
+            ax.set_xlabel("concurrent clients")
+            ax.set_title(f"{title} - {mix} mix", fontsize=10)
+            ax.grid(True, which="both", linestyle=":", alpha=0.6)
+    axes[0][0].legend(fontsize=8)
+    fig.tight_layout()
+    fig.savefig(out, dpi=150)
+    print(f"Wrote {out}")
+
 
 if __name__ == "__main__":
-    out = sys.argv[1] if len(sys.argv) > 1 else "tools/benchmark_results.png"
-    generate_benchmark_plots(out)
+    main()

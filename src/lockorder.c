@@ -1,57 +1,35 @@
 #define _POSIX_C_SOURCE 200809L
 #include "lockorder.h"
-#include <pthread.h>
-#include <string.h>
 
-static int lo_avail[M_MAX];
-static pthread_mutex_t lo_mu[M_MAX];
-static pthread_cond_t  lo_cv[M_MAX];
-static int lo_m = 0;
-
-int lockorder_init(const resource_config_t *rc) {
-    if (!rc) return -1;
-    lo_m = rc->m;
-    for (int i = 0; i < lo_m; i++) {
-        lo_avail[i] = rc->total[i];
-        pthread_mutex_init(&lo_mu[i], NULL);
-        pthread_cond_init(&lo_cv[i], NULL);
+bool lockorder_order_ok(const int *held, const int *request, int m) {
+    int highest_held = -1;
+    int lowest_req = m;
+    for (int j = 0; j < m; j++) {
+        if (held[j] > 0) highest_held = j;
+        if (request[j] > 0 && j < lowest_req) lowest_req = j;
     }
-    return 0;
+    return lowest_req > highest_held;
 }
 
-void lockorder_destroy(void) {
-    for (int i = 0; i < lo_m; i++) {
-        pthread_mutex_destroy(&lo_mu[i]);
-        pthread_cond_destroy(&lo_cv[i]);
-    }
-    lo_m = 0;
-}
-
-int lockorder_acquire_atomic(const int claim[M_MAX]) {
-    // Acquire strictly in ascending resource index order (0 to lo_m - 1)
-    for (int i = 0; i < lo_m; i++) {
-        int needed = claim[i];
-        if (needed <= 0) continue;
-
-        pthread_mutex_lock(&lo_mu[i]);
-        while (lo_avail[i] < needed) {
-            pthread_cond_wait(&lo_cv[i], &lo_mu[i]);
+int lockorder_sort_plan(acq_step_t *steps, int n) {
+    // Insertion sort: plans have at most a handful of steps.
+    for (int i = 1; i < n; i++) {
+        acq_step_t cur = steps[i];
+        int k = i - 1;
+        while (k >= 0 && steps[k].res > cur.res) {
+            steps[k + 1] = steps[k];
+            k--;
         }
-        lo_avail[i] -= needed;
-        pthread_mutex_unlock(&lo_mu[i]);
+        steps[k + 1] = cur;
     }
-    return 0;
-}
 
-void lockorder_release_all(const int claim[M_MAX]) {
-    // Release in reverse or arbitrary order
-    for (int i = lo_m - 1; i >= 0; i--) {
-        int count = claim[i];
-        if (count <= 0) continue;
-
-        pthread_mutex_lock(&lo_mu[i]);
-        lo_avail[i] += count;
-        pthread_cond_broadcast(&lo_cv[i]);
-        pthread_mutex_unlock(&lo_mu[i]);
+    int out = 0;
+    for (int i = 0; i < n; i++) {
+        if (out > 0 && steps[out - 1].res == steps[i].res) {
+            steps[out - 1].count += steps[i].count;
+        } else {
+            steps[out++] = steps[i];
+        }
     }
+    return out;
 }

@@ -1,119 +1,173 @@
 #define _POSIX_C_SOURCE 200809L
+// Randomized stress of the resource manager in incremental mode. Threads
+// acquire their claim one resource at a time in a random order (sorted in
+// lockorder mode) with random hold times. A checker thread asserts the
+// invariants of EDD §11.4 throughout:
+//   0 <= available[j] <= total[j]
+//   available[j] + sum_i alloc[i][j] == total[j]
+//   alloc[i][j] <= max[i][j]
+//   banker mode: every committed state is safe
+// Every mode except naive must finish all iterations (no hang past the watchdog).
 #include "rm.h"
 #include "banker.h"
+#include "lockorder.h"
 #include "config.h"
+#include "util.h"
 #include "log.h"
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <assert.h>
 #include <pthread.h>
 #include <stdatomic.h>
 
-#define NUM_THREADS 16
-#define ITERATIONS_PER_THREAD 50
+#define NUM_THREADS 24
+#define ITERATIONS_PER_THREAD 60
+#define WATCHDOG_MS 30000
+
+extern rm_t g_rm;
 
 static resource_config_t test_rc = {
     .m = 5,
     .res_names = {"WORKER", "BUF", "FD", "DB", "CLOCK"},
-    .total = {16, 64, 128, 4, 2},
-    .num_routes = 0
+    .total = {16, 32, 64, 3, 2},
 };
 
-static atomic_int completed_iterations = 0;
-static atomic_bool invariant_failed = false;
+static const int claims[4][M_MAX] = {
+    {1, 8, 1, 1, 0},  // query
+    {1, 16, 4, 1, 1}, // upload
+    {1, 4, 2, 1, 1},  // refresh
+    {1, 2, 2, 0, 0},  // static
+};
 
-extern rm_t g_rm;
+static server_mode_t g_mode;
+static atomic_int completed, granted, timeouts, aborted, errors;
+static atomic_bool invariant_failed, stop_checker;
 
-static void verify_invariants(void) {
+static void check_invariants(void) {
     pthread_mutex_lock(&g_rm.lock);
     for (int j = 0; j < g_rm.m; j++) {
-        int sum_alloc = 0;
+        int sum = 0;
         for (int i = 0; i < N_MAX; i++) {
-            if (g_rm.active[i]) {
-                if (g_rm.alloc[i][j] > g_rm.max[i][j]) {
-                    printf("Invariant violation: alloc > max for slot %d, res %d\n", i, j);
-                    atomic_store(&invariant_failed, true);
-                }
-                sum_alloc += g_rm.alloc[i][j];
-            }
+            if (!g_rm.active[i]) continue;
+            if (g_rm.alloc[i][j] > g_rm.max[i][j]) atomic_store(&invariant_failed, true);
+            sum += g_rm.alloc[i][j];
         }
-
-        if (g_rm.available[j] < 0 || g_rm.available[j] > g_rm.total[j]) {
-            printf("Invariant violation: available out of bounds for res %d: %d\n", j, g_rm.available[j]);
+        if (g_rm.available[j] < 0 || g_rm.available[j] > g_rm.total[j] ||
+            g_rm.available[j] + sum != g_rm.total[j]) {
             atomic_store(&invariant_failed, true);
         }
-
-        if (g_rm.available[j] + sum_alloc != g_rm.total[j]) {
-            printf("Invariant violation: available (%d) + sum_alloc (%d) != total (%d) for res %d\n",
-                   g_rm.available[j], sum_alloc, g_rm.total[j], j);
-            atomic_store(&invariant_failed, true);
-        }
+    }
+    if (g_mode == MODE_BANKER &&
+        !banker_is_safe(g_rm.available, (const int (*)[M_MAX])g_rm.alloc,
+                        (const int (*)[M_MAX])g_rm.max, g_rm.active, N_MAX, g_rm.m)) {
+        atomic_store(&invariant_failed, true);
     }
     pthread_mutex_unlock(&g_rm.lock);
 }
 
-static void *stress_thread_fn(void *arg) {
+static void *checker_fn(void *arg) {
     (void)arg;
+    while (!atomic_load(&stop_checker)) {
+        check_invariants();
+        sleep_ms(1);
+    }
+    return NULL;
+}
 
-    // Route claims: either DB-heavy or CLOCK-heavy
-    int claim_a[M_MAX] = {1, 4, 2, 1, 0}; // Query-like: needs DB
-    int claim_b[M_MAX] = {1, 8, 4, 0, 1}; // Upload-like: needs CLOCK
-    int claim_c[M_MAX] = {1, 2, 2, 1, 1}; // Refresh-like: needs DB + CLOCK
+static void *stress_fn(void *arg) {
+    unsigned int seed = (unsigned int)(uintptr_t)arg;
 
     for (int iter = 0; iter < ITERATIONS_PER_THREAD; iter++) {
         int slot = rm_alloc_slot();
         assert(slot >= 0);
+        const int *claim = claims[rand_r(&seed) % 4];
+        assert(rm_register_claim(slot, claim) == RM_SUCCESS);
 
-        int *claim = (iter % 3 == 0) ? claim_a : ((iter % 3 == 1) ? claim_b : claim_c);
-        rm_register_claim(slot, claim);
+        // Random acquisition order (Fisher-Yates over the claimed types)
+        acq_step_t plan[M_MAX];
+        int n = 0;
+        for (int j = 0; j < test_rc.m; j++) {
+            if (claim[j] > 0) plan[n++] = (acq_step_t){ j, claim[j] };
+        }
+        for (int k = n - 1; k > 0; k--) {
+            int r = rand_r(&seed) % (k + 1);
+            acq_step_t t = plan[k]; plan[k] = plan[r]; plan[r] = t;
+        }
+        if (g_mode == MODE_LOCKORDER) n = lockorder_sort_plan(plan, n);
 
-        int rc = rm_acquire_atomic(slot, claim, 2000);
-        if (rc == RM_SUCCESS) {
-            // Check system invariants while holding resources
-            verify_invariants();
-
-            // Simulate small work
-            struct timespec ts = {0, 200000}; // 200 us
-            nanosleep(&ts, NULL);
-
-            rm_release_all(slot);
+        int rc = RM_SUCCESS;
+        for (int s = 0; s < n && rc == RM_SUCCESS; s++) {
+            rc = rm_acquire(slot, plan[s].res, plan[s].count, 2000);
+            if (rc == RM_SUCCESS) sleep_ms(rand_r(&seed) % 2);
         }
 
-        rm_free_slot(slot);
-        atomic_fetch_add(&completed_iterations, 1);
-    }
+        if (rc == RM_SUCCESS) { atomic_fetch_add(&granted, 1); sleep_ms(rand_r(&seed) % 3); }
+        else if (rc == RM_TIMEOUT) atomic_fetch_add(&timeouts, 1);
+        else if (rc == RM_ABORTED) atomic_fetch_add(&aborted, 1);
+        else atomic_fetch_add(&errors, 1);
 
+        rm_free_slot(slot);
+        atomic_fetch_add(&completed, 1);
+    }
     return NULL;
 }
 
-int main(void) {
-    printf("=== Running Resource Manager & Banker's Stress Test ===\n");
-    assert(rm_init(&test_rc, MODE_BANKER, ADMIT_ATOMIC, 2000) == 0);
+static void run_mode(server_mode_t mode, const char *name, int aging_ms) {
+    g_mode = mode;
+    atomic_store(&completed, 0);
+    atomic_store(&granted, 0);
+    atomic_store(&timeouts, 0);
+    atomic_store(&aborted, 0);
+    atomic_store(&errors, 0);
+    atomic_store(&invariant_failed, false);
+    atomic_store(&stop_checker, false);
 
-    pthread_t threads[NUM_THREADS];
+    assert(rm_init(&test_rc, mode, 2000, 20) == 0);
+    rm_set_fairness_aging(aging_ms);
+
+    pthread_t checker, threads[NUM_THREADS];
+    pthread_create(&checker, NULL, checker_fn, NULL);
     for (int i = 0; i < NUM_THREADS; i++) {
-        pthread_create(&threads[i], NULL, stress_thread_fn, NULL);
+        pthread_create(&threads[i], NULL, stress_fn, (void *)(uintptr_t)(1000 + i));
     }
 
-    for (int i = 0; i < NUM_THREADS; i++) {
-        pthread_join(threads[i], NULL);
+    int expected = NUM_THREADS * ITERATIONS_PER_THREAD;
+    int waited = 0;
+    while (atomic_load(&completed) < expected && waited < WATCHDOG_MS) {
+        sleep_ms(20);
+        waited += 20;
     }
+    bool hung = atomic_load(&completed) < expected;
+    if (hung) rm_shutdown();
 
-    int total_expected = NUM_THREADS * ITERATIONS_PER_THREAD;
-    int total_actual = atomic_load(&completed_iterations);
-    bool failed = atomic_load(&invariant_failed);
+    for (int i = 0; i < NUM_THREADS; i++) pthread_join(threads[i], NULL);
+    atomic_store(&stop_checker, true);
+    pthread_join(checker, NULL);
 
-    printf("[test_rm_stress] Completed %d / %d iterations under concurrent stress.\n",
-           total_actual, total_expected);
-    printf("[test_rm_stress] Invariants intact (available + alloc == total): %s\n",
-           !failed ? "PASS" : "FAIL");
+    rm_snapshot_t s;
+    rm_get_snapshot(&s);
+    printf("[test_rm_stress] %-10s granted=%d timeouts=%d victims=%d errors=%d hung=%s invariants=%s\n",
+           name, atomic_load(&granted), atomic_load(&timeouts), atomic_load(&aborted),
+           atomic_load(&errors), hung ? "yes" : "no",
+           atomic_load(&invariant_failed) ? "FAIL" : "ok");
 
-    assert(total_actual == total_expected);
-    assert(!failed);
-
+    assert(!hung);
+    assert(!atomic_load(&invariant_failed));
+    assert(atomic_load(&errors) == 0);
+    if (mode != MODE_DETECT) assert(atomic_load(&aborted) == 0);
     rm_destroy();
+}
+
+int main(void) {
+    log_set_level(LOG_LEVEL_ERROR); // Victim/violation warnings are expected here
+    printf("=== Running Resource Manager Stress Test (incremental, random order) ===\n");
+    run_mode(MODE_BANKER, "banker", 250);
+    // Aggressive aging keeps the starvation guard engaged most of the time,
+    // exercising its interplay with the FIFO rule (no livelock allowed).
+    run_mode(MODE_BANKER, "banker/20", 20);
+    run_mode(MODE_LOCKORDER, "lockorder", 250);
+    run_mode(MODE_DETECT, "detect", 250);
     printf("=== All RM Stress Tests Passed! ===\n");
     return 0;
 }

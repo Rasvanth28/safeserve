@@ -11,7 +11,6 @@ typedef struct {
     int listen_fd;
     pthread_t *worker_threads;
     int num_workers;
-    volatile bool running;
 } server_context_t;
 
 int worker_pool_start(server_context_t *ctx);

@@ -2,6 +2,7 @@
 #define SAFESERVE_LOG_H
 
 #include <stddef.h>
+#include <stdbool.h>
 
 typedef enum {
     LOG_LEVEL_DEBUG,
@@ -12,6 +13,12 @@ typedef enum {
 
 int log_init(const char *filepath);
 void log_close(void);
+
+// Messages below `level` are dropped (default LOG_LEVEL_DEBUG: keep all).
+void log_set_level(log_level_t level);
+
+// Enables/disables per-request [REQ] lines (on by default).
+void log_set_requests(bool enabled);
 
 void log_msg(log_level_t level, const char *fmt, ...);
 void log_request(const char *route, int status, double total_ms, double queue_ms, double admit_ms, size_t bytes);

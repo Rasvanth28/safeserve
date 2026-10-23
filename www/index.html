@@ -187,7 +187,7 @@
                         <span class="card-title">5xx Rejections / Timeouts</span>
                     </div>
                     <div class="stat-val" style="color: var(--danger);" id="stat-5xx">0</div>
-                    <div class="stat-sub">Queue full or admission timed out</div>
+                    <div class="stat-sub">503 (queue full, timeout, victim) or 500</div>
                 </div>
                 <div class="card">
                     <div class="card-header">
@@ -395,6 +395,8 @@
         }
 
         // Fetch metrics from SafeServe backend
+        let lastPoll = null;
+
         async function fetchMetrics() {
             try {
                 const res = await fetch('/metrics');
@@ -406,10 +408,25 @@
                 document.getElementById('stat-5xx').innerText = data.requests.status_5xx;
                 document.getElementById('stat-check-time').innerText = data.banker.avg_safety_check_us.toFixed(2) + ' µs';
 
-                // Update resource bars
-                const active = data.resources.active_slots || 0;
-                document.getElementById('bar-worker').style.width = Math.min((active / 16) * 100, 100) + '%';
-                document.getElementById('label-worker').innerText = `${active} / 16 held`;
+                // Update resource bars from the live allocation table
+                (data.resources.table || []).forEach(row => {
+                    const key = row.name.toLowerCase();
+                    const bar = document.getElementById('bar-' + key);
+                    const label = document.getElementById('label-' + key);
+                    if (!bar || !label) return;
+                    const pct = row.total > 0 ? (row.allocated / row.total) * 100 : 0;
+                    bar.style.width = Math.min(pct, 100) + '%';
+                    label.innerText = `${row.allocated} / ${row.total} held`;
+                });
+
+                // Request rate since the previous poll
+                const now = performance.now();
+                if (lastPoll) {
+                    const rate = (data.requests.total - lastPoll.total) / ((now - lastPoll.t) / 1000);
+                    document.getElementById('stat-rate').innerText =
+                        `${Math.max(rate, 0).toFixed(1)} req/s · ${data.mode} / ${data.admit_mode}`;
+                }
+                lastPoll = { total: data.requests.total, t: now };
             } catch (err) {
                 // If running standalone without live server
                 console.log('Metrics fetch note:', err.message);
@@ -427,7 +444,7 @@
                 const t1 = performance.now();
                 const latency = (t1 - t0).toFixed(1);
                 const data = await res.text();
-                logToConsole(`${method} ${endpoint} ➔ ${res.status} OK (${latency}ms): ${data.trim()}`, res.status === 200 ? 'log-200' : 'log-503');
+                logToConsole(`${method} ${endpoint} ➔ ${res.status} ${res.statusText} (${latency}ms): ${data.trim()}`, res.status === 200 ? 'log-200' : 'log-503');
                 fetchMetrics();
             } catch (err) {
                 const t1 = performance.now();

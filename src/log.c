@@ -6,9 +6,20 @@
 #include <time.h>
 #include <pthread.h>
 #include <string.h>
+#include <stdatomic.h>
 
 static FILE *log_fp = NULL;
 static pthread_mutex_t log_mu = PTHREAD_MUTEX_INITIALIZER;
+static atomic_bool log_requests_enabled = true;
+static atomic_int log_min_level = LOG_LEVEL_DEBUG;
+
+void log_set_level(log_level_t level) {
+    atomic_store(&log_min_level, (int)level);
+}
+
+void log_set_requests(bool enabled) {
+    atomic_store(&log_requests_enabled, enabled);
+}
 
 int log_init(const char *filepath) {
     pthread_mutex_lock(&log_mu);
@@ -36,6 +47,7 @@ void log_close(void) {
 }
 
 void log_msg(log_level_t level, const char *fmt, ...) {
+    if ((int)level < atomic_load(&log_min_level)) return;
     pthread_mutex_lock(&log_mu);
     FILE *out = log_fp ? log_fp : stdout;
 
@@ -68,6 +80,7 @@ void log_msg(log_level_t level, const char *fmt, ...) {
 }
 
 void log_request(const char *route, int status, double total_ms, double queue_ms, double admit_ms, size_t bytes) {
+    if (!atomic_load(&log_requests_enabled)) return;
     pthread_mutex_lock(&log_mu);
     FILE *out = log_fp ? log_fp : stdout;
 

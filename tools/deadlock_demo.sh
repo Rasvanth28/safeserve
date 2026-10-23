@@ -1,82 +1,73 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+# Live deadlock demo against the real HTTP server.
+#
+# For each strategy: start SafeServe, fire 2 x POST /upload (CLOCK -> DB) and
+# 4 x POST /refresh (DB -> CLOCK) at the same moment, and see what happens.
+# With 4 DB connections and 2 cache locks, if the uploads grab both CLOCKs and
+# the refreshes grab all four DBs, every request waits on another: deadlock.
+set -uo pipefail
+cd "$(dirname "$0")/.."
 
-PORT_NAIVE=8990
-PORT_BANKER=8991
+SAFESERVE=${SAFESERVE:-bin/safeserve}
+PORT=${PORT:-18990}
+BASE="http://127.0.0.1:$PORT"
+TIMEOUT=4
+[ -x "$SAFESERVE" ] || { echo "Build first: make" >&2; exit 1; }
 
-echo "============================================================"
-echo "          SafeServe Deadlock Demonstration Script           "
-echo "============================================================"
-echo ""
+run_mode() {
+    local mode=$1
+    echo "============================================================"
+    echo " mode = $mode"
+    echo "============================================================"
+    "$SAFESERVE" --port "$PORT" --mode "$mode" --admit-mode incremental --quiet \
+        > "/tmp/safeserve_demo_$mode.log" 2>&1 &
+    local pid=$!
+    for _ in $(seq 1 50); do curl -s -o /dev/null "$BASE/health" && break; sleep 0.1; done
 
-# Ensure binaries are built
-make all > /dev/null
+    local out=/tmp/safeserve_demo_codes
+    rm -f "$out"
+    local pids=()
+    for i in 1 2; do
+        curl -s -m $TIMEOUT -o /dev/null -w "upload  %{http_code} %{time_total}s\n" \
+            -X POST -d payload "$BASE/upload" >> "$out" &
+        pids+=($!)
+    done
+    for i in 1 2 3 4; do
+        curl -s -m $TIMEOUT -o /dev/null -w "refresh %{http_code} %{time_total}s\n" \
+            -X POST "$BASE/refresh" >> "$out" &
+        pids+=($!)
+    done
 
-echo ">>> PART 1: Testing NAIVE Mode (No deadlock protection)"
-echo "Starting SafeServe in NAIVE mode on port $PORT_NAIVE..."
-./bin/safeserve --port $PORT_NAIVE --mode naive > /tmp/safeserve_naive.log 2>&1 &
-PID_NAIVE=$!
-sleep 1
+    sleep 1
+    echo "Resource table 1 s after the burst (from /metrics):"
+    curl -s "$BASE/metrics" | python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+r = d["resources"]
+print("  waiting requests: %d of %d active" % (r["waiting_slots"], r["active_slots"]))
+for row in r["table"]:
+    print("  %-6s %3d / %3d in use" % (row["name"], row["allocated"], row["total"]))
+print("  deadlocks found: %d   victims aborted: %d   unsafe grants refused: %d" % (
+    d["detect"]["deadlocks_found"], d["detect"]["victims_aborted"], d["banker"]["unsafe_denials"]))
+' 2>/dev/null || echo "  (install python3 to pretty-print /metrics)"
 
-# Check server is up
-curl -s http://127.0.0.1:$PORT_NAIVE/health > /dev/null || { echo "Failed to start naive server"; exit 1; }
-echo "Naive server running (PID: $PID_NAIVE)."
+    wait "${pids[@]}"
+    echo "Responses (000 = no answer within ${TIMEOUT}s):"
+    sort "$out" | sed 's/^/  /'
+    local ok frozen
+    ok=$(grep -c ' 200 ' "$out")
+    frozen=$(grep -c ' 000 ' "$out")
+    echo "/health still answers: $(curl -s -m 2 -o /dev/null -w '%{http_code}' "$BASE/health")"
+    if [ "$frozen" -gt 0 ]; then
+        echo ">>> RESULT: DEADLOCK - $frozen of 6 requests never answered."
+    else
+        echo ">>> RESULT: no deadlock - $ok of 6 succeeded, $((6 - ok)) got an explicit 503."
+    fi
+    kill -INT "$pid" 2>/dev/null
+    wait "$pid" 2>/dev/null
+    echo
+}
 
-echo "Injecting conflicting requests with cross-resource claims (DB vs CLOCK)..."
-# Trigger concurrent /refresh and /upload
-curl -s -m 3 -X POST http://127.0.0.1:$PORT_NAIVE/refresh > /dev/null 2>&1 &
-PID_REQ1=$!
-curl -s -m 3 -X POST http://127.0.0.1:$PORT_NAIVE/upload -d "payload" > /dev/null 2>&1 &
-PID_REQ2=$!
-
-sleep 2
-
-# Check if requests completed or froze
-if kill -0 $PID_REQ1 2>/dev/null || kill -0 $PID_REQ2 2>/dev/null; then
-    echo ">>> RESULT: Deadlock triggered in NAIVE mode! Requests are frozen in circular wait."
-else
-    echo "Requests finished."
-fi
-
-kill -9 $PID_NAIVE $PID_REQ1 $PID_REQ2 2>/dev/null || true
-echo "Cleaned up naive mode processes."
-echo ""
-
-echo "------------------------------------------------------------"
-echo ">>> PART 2: Testing SAFESERVE (Banker's Avoidance Mode)"
-echo "Starting SafeServe in BANKER mode on port $PORT_BANKER..."
-./bin/safeserve --port $PORT_BANKER --mode banker > /tmp/safeserve_banker.log 2>&1 &
-PID_BANKER=$!
-sleep 1
-
-# Check server is up
-curl -s http://127.0.0.1:$PORT_BANKER/health > /dev/null || { echo "Failed to start banker server"; exit 1; }
-echo "SafeServe running in Banker's mode (PID: $PID_BANKER)."
-
-echo "Injecting the EXACT SAME conflicting concurrent requests..."
-RESP1=$(curl -s -X POST http://127.0.0.1:$PORT_BANKER/refresh)
-RESP2=$(curl -s -X POST http://127.0.0.1:$PORT_BANKER/upload -d "payload")
-HEALTH_RESP=$(curl -s http://127.0.0.1:$PORT_BANKER/health)
-
-echo "Response 1 (/refresh): $RESP1"
-echo "Response 2 (/upload):  $RESP2"
-echo "Response 3 (/health):  $HEALTH_RESP"
-
-if [[ "$RESP1" =~ "refreshed" ]] && [[ "$RESP2" =~ "bytes_received" ]]; then
-    echo ""
-    echo ">>> RESULT: SUCCESS! Zero deadlocks occurred under Banker's algorithm."
-    echo "    Requests were admitted in safe sequence and processed concurrently without freezing."
-else
-    echo "Unexpected response."
-fi
-
-# Fetch metrics
-echo ""
-echo ">>> Banker's Algorithm Metrics Snapshot:"
-curl -s http://127.0.0.1:$PORT_BANKER/metrics
-
-kill -TERM $PID_BANKER 2>/dev/null || true
-wait $PID_BANKER 2>/dev/null || true
-echo ""
-echo "SafeServe gracefully stopped."
-echo "============================================================"
+for mode in ${MODES:-naive banker lockorder detect}; do
+    run_mode "$mode"
+done

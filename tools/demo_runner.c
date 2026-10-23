@@ -1,171 +1,151 @@
 #define _POSIX_C_SOURCE 200809L
+// In-process deadlock demo: the same two-thread workload under all four
+// strategies, using the real resource manager.
+//
+//   /refresh thread: DB    -> (100 ms) -> CLOCK
+//   /upload  thread: CLOCK -> (100 ms) -> DB
+//
+// One DB connection and one cache lock exist, so if both threads get their
+// first resource, each waits forever for the other's (circular wait).
 #include "rm.h"
-#include "banker.h"
-#include "naive.h"
+#include "lockorder.h"
 #include "config.h"
 #include "log.h"
+#include "util.h"
 
 #include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
+#include <string.h>
 #include <pthread.h>
 #include <stdatomic.h>
 
 static resource_config_t demo_rc = {
     .m = 2,
     .res_names = {"DB", "CLOCK"},
-    .total = {1, 1}, // 1 DB connection, 1 Cache write lock
-    .num_routes = 0
+    .total = {1, 1},
 };
 
-// Thread 1: Refresh simulation (takes DB, delays, takes CLOCK)
-// Thread 2: Upload simulation  (takes CLOCK, delays, takes DB)
+static struct timespec t_start;
+static pthread_mutex_t print_mu = PTHREAD_MUTEX_INITIALIZER;
 
-static atomic_bool t1_done = false;
-static atomic_bool t2_done = false;
-
-static void *naive_thread1(void *arg) {
-    (void)arg;
-    printf("  [Thread 1 - /refresh] Acquiring DB...\n");
-    naive_acquire(0, 1);
-    printf("  [Thread 1 - /refresh] Acquired DB. Simulating delay before requesting CLOCK...\n");
-    usleep(100000); // 100 ms
-
-    printf("  [Thread 1 - /refresh] Acquiring CLOCK...\n");
-    naive_acquire(1, 1);
-    printf("  [Thread 1 - /refresh] Acquired both! Releasing...\n");
-    naive_release(1, 1);
-    naive_release(0, 1);
-
-    atomic_store(&t1_done, true);
-    return NULL;
+static void say(const char *who, const char *fmt, const char *arg) {
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    pthread_mutex_lock(&print_mu);
+    printf("  [%5.0f ms] %-9s ", timespec_diff_ms(&t_start, &now), who);
+    printf(fmt, arg);
+    printf("\n");
+    fflush(stdout);
+    pthread_mutex_unlock(&print_mu);
 }
 
-static void *naive_thread2(void *arg) {
-    (void)arg;
-    printf("  [Thread 2 - /upload]  Acquiring CLOCK...\n");
-    naive_acquire(1, 1);
-    printf("  [Thread 2 - /upload]  Acquired CLOCK. Simulating delay before requesting DB...\n");
-    usleep(100000); // 100 ms
+typedef struct {
+    const char *name;
+    int first, second;
+    server_mode_t mode;
+    int rc;
+    atomic_bool done;
+} actor_t;
 
-    printf("  [Thread 2 - /upload]  Acquiring DB...\n");
-    naive_acquire(0, 1);
-    printf("  [Thread 2 - /upload]  Acquired both! Releasing...\n");
-    naive_release(0, 1);
-    naive_release(1, 1);
-
-    atomic_store(&t2_done, true);
-    return NULL;
-}
-
-static void run_naive_demo(void) {
-    printf("============================================================\n");
-    printf(">>> PART 1: NAIVE BASELINE (Uncoordinated Acquisition)\n");
-    printf("============================================================\n");
-    naive_init(&demo_rc);
-    atomic_store(&t1_done, false);
-    atomic_store(&t2_done, false);
-
-    pthread_t th1, th2;
-    pthread_create(&th1, NULL, naive_thread1, NULL);
-    pthread_create(&th2, NULL, naive_thread2, NULL);
-
-    // Watchdog check for 1.5 seconds
-    usleep(1500000);
-
-    bool done1 = atomic_load(&t1_done);
-    bool done2 = atomic_load(&t2_done);
-
-    if (!done1 && !done2) {
-        printf("\n>>> DEMO RESULT: DEADLOCK CONFIRMED!\n");
-        printf("    Thread 1 holds DB and is blocked waiting for CLOCK.\n");
-        printf("    Thread 2 holds CLOCK and is blocked waiting for DB.\n");
-        printf("    System is permanently frozen in circular wait.\n");
-    }
-
-    // Cancel threads to clean up
-    pthread_cancel(th1);
-    pthread_cancel(th2);
-    pthread_join(th1, NULL);
-    pthread_join(th2, NULL);
-    naive_destroy();
-}
-
-// Banker's mode simulation
-static void *banker_thread1(void *arg) {
-    (void)arg;
+static void *actor_fn(void *arg) {
+    actor_t *a = arg;
     int slot = rm_alloc_slot();
-    int claim[M_MAX] = {1, 1}; // Needs DB and CLOCK
+    int claim[M_MAX] = {1, 1};
     rm_register_claim(slot, claim);
 
-    printf("  [SafeServe - /refresh] Submitting claim {DB:1, CLOCK:1} to Banker's controller...\n");
-    int rc = rm_acquire_atomic(slot, claim, 2000);
-    if (rc == RM_SUCCESS) {
-        printf("  [SafeServe - /refresh] Granted! Safely executing...\n");
-        usleep(50000);
-        rm_release_all(slot);
-        printf("  [SafeServe - /refresh] Completed and released resources.\n");
+    acq_step_t plan[2] = { {a->first, 1}, {a->second, 1} };
+    if (a->mode == MODE_LOCKORDER) {
+        lockorder_sort_plan(plan, 2);
+        if (plan[0].res != a->first) say(a->name, "reorders its plan to %s first (global order)", demo_rc.res_names[plan[0].res]);
+    }
+
+    for (int s = 0; s < 2; s++) {
+        const char *res = demo_rc.res_names[plan[s].res];
+        say(a->name, "requests %s ...", res);
+        a->rc = rm_acquire(slot, plan[s].res, 1, 3000);
+        if (a->rc != RM_SUCCESS) {
+            say(a->name, "-> %s", rm_strerror(a->rc));
+            break;
+        }
+        say(a->name, "-> got %s", res);
+        if (s == 0) sleep_ms(100);
+    }
+
+    if (a->rc == RM_SUCCESS) {
+        sleep_ms(50);
+        say(a->name, "finished its work and %s", "released DB + CLOCK");
     }
     rm_free_slot(slot);
-    atomic_store(&t1_done, true);
+    atomic_store(&a->done, true);
     return NULL;
 }
 
-static void *banker_thread2(void *arg) {
-    (void)arg;
-    int slot = rm_alloc_slot();
-    int claim[M_MAX] = {1, 1}; // Needs DB and CLOCK
-    rm_register_claim(slot, claim);
+static void run(server_mode_t mode, const char *title, const char *explain) {
+    printf("\n------------------------------------------------------------\n");
+    printf(" mode = %s  (%s)\n", config_mode_name(mode), title);
+    printf("------------------------------------------------------------\n");
 
-    printf("  [SafeServe - /upload]  Submitting claim {DB:1, CLOCK:1} to Banker's controller...\n");
-    int rc = rm_acquire_atomic(slot, claim, 2000);
-    if (rc == RM_SUCCESS) {
-        printf("  [SafeServe - /upload]  Granted! Safely executing...\n");
-        usleep(50000);
-        rm_release_all(slot);
-        printf("  [SafeServe - /upload]  Completed and released resources.\n");
-    }
-    rm_free_slot(slot);
-    atomic_store(&t2_done, true);
-    return NULL;
-}
+    rm_init(&demo_rc, mode, 3000, 100);
+    clock_gettime(CLOCK_MONOTONIC, &t_start);
 
-static void run_banker_demo(void) {
-    printf("\n============================================================\n");
-    printf(">>> PART 2: SAFESERVE (Banker's Avoidance Algorithm)\n");
-    printf("============================================================\n");
-    rm_init(&demo_rc, MODE_BANKER, ADMIT_ATOMIC, 2000);
-    atomic_store(&t1_done, false);
-    atomic_store(&t2_done, false);
+    actor_t a = { .name = "/refresh", .first = 0, .second = 1, .mode = mode };
+    actor_t b = { .name = "/upload", .first = 1, .second = 0, .mode = mode };
+    atomic_init(&a.done, false);
+    atomic_init(&b.done, false);
 
-    pthread_t th1, th2;
-    pthread_create(&th1, NULL, banker_thread1, NULL);
-    pthread_create(&th2, NULL, banker_thread2, NULL);
+    pthread_t ta, tb;
+    pthread_create(&ta, NULL, actor_fn, &a);
+    sleep_ms(5);
+    pthread_create(&tb, NULL, actor_fn, &b);
 
-    pthread_join(th1, NULL);
-    pthread_join(th2, NULL);
-
-    bool done1 = atomic_load(&t1_done);
-    bool done2 = atomic_load(&t2_done);
-
-    if (done1 && done2) {
-        printf("\n>>> DEMO RESULT: SUCCESS! ZERO DEADLOCKS!\n");
-        printf("    Banker's algorithm detected that granting both claims simultaneously\n");
-        printf("    would create an unsafe state. It safely serialized execution,\n");
-        printf("    allowing both requests to complete without freezing.\n");
+    for (int waited = 0; waited < 1500; waited += 10) {
+        if (atomic_load(&a.done) && atomic_load(&b.done)) break;
+        sleep_ms(10);
     }
 
+    bool frozen = !atomic_load(&a.done) || !atomic_load(&b.done);
+    if (frozen) {
+        say("watchdog", "%s", "both threads still blocked after 1.5 s -> DEADLOCK");
+        rm_shutdown(); // Unblock them so the demo can continue
+    }
+    pthread_join(ta, NULL);
+    pthread_join(tb, NULL);
+
+    rm_snapshot_t s;
+    rm_get_snapshot(&s);
+    int ok = (a.rc == RM_SUCCESS) + (b.rc == RM_SUCCESS);
+    printf("\n  RESULT: %s\n", frozen ? "DEADLOCK - neither request can ever finish"
+                                      : (ok == 2 ? "both requests completed"
+                                                 : "deadlock broken; one request aborted, one completed"));
+    if (mode == MODE_BANKER) {
+        printf("          Banker's refused %llu grant(s) that would have been unsafe.\n",
+               (unsigned long long)s.unsafe_denials);
+    }
+    if (mode == MODE_DETECT) {
+        printf("          Detector found %llu deadlock(s), aborted %llu victim(s).\n",
+               (unsigned long long)s.deadlocks_found, (unsigned long long)s.victims_aborted);
+    }
+    printf("  WHY:    %s\n", explain);
     rm_destroy();
 }
 
 int main(void) {
+    log_set_level(LOG_LEVEL_ERROR);
     printf("############################################################\n");
-    printf("#     SafeServe Deadlock vs. Banker's Avoidance Demo       #\n");
-    printf("############################################################\n\n");
-    run_naive_demo();
-    run_banker_demo();
-    printf("\n############################################################\n");
-    printf("#                    Demo Complete                         #\n");
+    printf("#   SafeServe: one workload, four deadlock strategies      #\n");
     printf("############################################################\n");
+    printf("Resources: DB x1, CLOCK x1. Both requests claim {DB:1, CLOCK:1}.\n");
+    printf("/refresh takes DB then CLOCK; /upload takes CLOCK then DB.\n");
+
+    run(MODE_NAIVE, "no deadlock handling",
+        "each holds one resource and waits for the other: circular wait.");
+    run(MODE_BANKER, "avoidance",
+        "granting CLOCK to /upload while /refresh holds DB leaves no safe\n"
+        "          sequence, so /upload waits until /refresh finishes.");
+    run(MODE_LOCKORDER, "prevention",
+        "both take DB before CLOCK, so a cycle cannot form.");
+    run(MODE_DETECT, "detection and recovery",
+        "the deadlock happens, the detector finds it and aborts a victim\n"
+        "          (the victim's request gets 503 and its work is lost).");
+    printf("\n");
     return 0;
 }

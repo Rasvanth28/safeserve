@@ -2,9 +2,9 @@
 
 **Project:** SafeServe, a multi-threaded web server with deadlock-safe admission control
 **Language:** C11, POSIX threads, Linux
-**Status:** Draft v1.0
-**Last updated:** 2026-10-21
-**Companion:** `PRD.md`
+**Status:** v1.1 (implemented; see §18 for as-built changes)
+**Last updated:** 2026-10-23
+**Companion:** `PRD.md`, `REPORT.md`
 
 ---
 
@@ -367,9 +367,28 @@ Compiler flags: `-std=c11 -Wall -Wextra -Werror -O2 -g -pthread`.
 | Timing-dependent baseline demo is flaky | Deterministic order with fixed `usleep` and a barrier so both requests hold their first resource before requesting the second |
 | Benchmark noise from the client sharing the machine | Pin server and load generator to different cores; repeat runs |
 
-## 17. Open Questions
+## 17. Open Questions (resolved)
 
-1. Default admission mode for the final demo (atomic vs. incremental).
-2. Real SQLite vs. simulated DB resource.
-3. Persistent connections (keep-alive) in scope or not.
-4. Plot tooling: Python/matplotlib or gnuplot.
+1. Default admission mode: **incremental**. Atomic reservation removes hold-and-wait by itself, so under atomic no strategy can deadlock and the comparison is empty. Atomic stays available as `banker:atomic` in the benchmark.
+2. DB: **simulated** with a configurable delay. Contention on the DB pool is real; the query is not.
+3. Keep-alive: **out of scope**. Every response is `Connection: close`.
+4. Plots: **Python/matplotlib** (`tools/plot.py`), reading only the benchmark CSV.
+
+## 18. As-Built Notes
+
+Where the implementation differs from or refines the design above, and why.
+
+| Area | Design | As built | Reason |
+|---|---|---|---|
+| Strategy modules | Per-strategy lock sets (per-resource mutexes for naive and lockorder) | One set of tables in `rm.c` behind one mutex; `naive.c`, `lockorder.c`, `detect.c` and `banker.c` are pure policy functions over those tables | All four strategies see identical accounting, and the policies are unit-testable without threads. Deadlock comes from hold-and-wait plus circular wait, not from the lock granularity, so naive still deadlocks. |
+| Waiting | All modes time out after `admit_timeout_ms` | Banker and lockorder time out. Naive and detect wait until granted, aborted or shut down | If naive waits time out, a deadlock turns into slow 503s instead of a freeze. In detect mode only the detector should break deadlocks. |
+| Admission timeout | Per acquisition call | One deadline per request, shared by all incremental steps | Keeps admission latency bounded by `admit_timeout_ms` (G3) instead of steps × timeout. |
+| Detection input | Wait-for graph / `Max − Alloc` | Request matrix: `request[i]` is set only while slot *i* is blocked | `Max − Alloc` is Banker's safety test, not detection. With the Request matrix, a running request is never mistaken for a deadlocked one. |
+| Victim recovery | Mark aborted, release, wake | Same; victims are always blocked in `rm_acquire_vec` when chosen, so their resources are never revoked while in use | Correctness of revocation. |
+| Lock ordering | Sort claim in release builds, assert in debug | Handlers' plans are sorted by `lockorder_sort_plan`; any downhill request at runtime returns `RM_ORDER` (500) and is counted | Enforced in every build, observable in `/metrics`. |
+| Fairness (§6.4) | FIFO tickets; aging only if needed | FIFO rule plus aging (`fairness_aging_ms`, default 250 ms). After that wait, slots holding nothing yield to the aged waiter; the FIFO rule only defers to waiters the aging rule is not holding back | The FIFO rule alone did not prevent starvation of a 4-unit claim among 1-unit claims (`test_modes`). A first version without the "not held back" condition livelocked under load: two waiters each yielded to the other. |
+| Overload | Queue limit + admission timeout | Also `queue_timeout_ms` (default 1 s): a request that waited longer in the queue gets 503 without running | Without it, at 200 clients workers spent all their time serving requests whose clients had already timed out, and goodput fell to zero in every mode. |
+| `/upload` claim | WORKER, BUF, FD, CLOCK | Adds `DB: 1` (upload records itself in the DB after taking the cache lock) | Gives the opposite-order pair `/upload` (CLOCK→DB) and `/refresh` (DB→CLOCK). |
+| Zero-claim routes | Admit before worker acquisition | `/health` and `/metrics` skip the resource manager entirely | They stay available during a naive deadlock, which the demo relies on. |
+| Load generator | `loadgen` (C or Python) | `tools/loadgen.c`: closed-loop, seeded, attributes requests by start time | A frozen server shows up as timeouts, not as an empty measurement window. |
+
