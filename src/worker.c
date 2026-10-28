@@ -52,7 +52,7 @@ static int serve_request(server_context_t *ctx, int fd, const http_request_t *re
     }
     // Route label for the live view; keep it JSON-safe
     char label[24];
-    snprintf(label, sizeof(label), "%s", req->path);
+    snprintf(label, sizeof(label), "%.*s", (int)sizeof(label) - 1, req->path);  // long paths are cut
     for (char *c = label; *c; c++) {
         if (!(isalnum((unsigned char)*c) || *c == '/' || *c == '.' || *c == '_' || *c == '-')) *c = '_';
     }
