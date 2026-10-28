@@ -73,6 +73,8 @@ int rm_alloc_slot(void) {
             g_rm.ticket[i] = g_rm.next_ticket++;
             g_rm.aborted[i] = false;
             g_rm.waiting[i] = false;
+            g_rm.label[i][0] = '\0';
+            clock_gettime(CLOCK_MONOTONIC, &g_rm.started[i]);
             for (int j = 0; j < M_MAX; j++) {
                 g_rm.max[i][j] = 0;
                 g_rm.alloc[i][j] = 0;
@@ -284,6 +286,8 @@ int rm_acquire_vec(int slot, const int req[M_MAX], int timeout_ms) {
             for (int j = 0; j < g_rm.m; j++) {
                 g_rm.available[j] -= req[j];
                 g_rm.alloc[slot][j] += req[j];
+                int used = g_rm.total[j] - g_rm.available[j];
+                if (used > g_rm.peak[j]) g_rm.peak[j] = used;
             }
             rc = RM_SUCCESS;
             break;
@@ -396,6 +400,7 @@ void rm_get_snapshot(rm_snapshot_t *out) {
         memcpy(out->res_names[j], g_rm.res_names[j], sizeof(out->res_names[j]));
         out->total[j] = g_rm.total[j];
         out->available[j] = g_rm.available[j];
+        out->peak[j] = g_rm.peak[j];
     }
     out->active_slots = g_rm.n_active;
     out->waiting_slots = g_rm.n_waiting;
@@ -405,6 +410,39 @@ void rm_get_snapshot(rm_snapshot_t *out) {
     out->victims_aborted = g_rm.victims_aborted;
     out->order_violations = g_rm.order_violations;
     pthread_mutex_unlock(&g_rm.lock);
+}
+
+void rm_set_label(int slot, const char *label) {
+    if (slot < 0 || slot >= N_MAX || !label) return;
+    pthread_mutex_lock(&g_rm.lock);
+    snprintf(g_rm.label[slot], sizeof(g_rm.label[slot]), "%s", label);
+    pthread_mutex_unlock(&g_rm.lock);
+}
+
+int rm_list_inflight(rm_inflight_t *out, int max_out) {
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    int n = 0;
+    pthread_mutex_lock(&g_rm.lock);
+    for (int i = 0; i < N_MAX && n < max_out; i++) {
+        if (!g_rm.active[i]) continue;
+        rm_inflight_t *e = &out[n++];
+        e->slot = i;
+        memcpy(e->label, g_rm.label[i], sizeof(e->label));
+        memcpy(e->alloc, g_rm.alloc[i], sizeof(e->alloc));
+        memcpy(e->request, g_rm.request[i], sizeof(e->request));
+        e->waiting = g_rm.waiting[i];
+        e->age_ms = timespec_diff_ms(&g_rm.started[i], &now);
+    }
+    pthread_mutex_unlock(&g_rm.lock);
+    // Slots are reused, so sort by age to list the oldest request first
+    for (int a = 1; a < n; a++) {
+        rm_inflight_t tmp = out[a];
+        int b = a - 1;
+        while (b >= 0 && out[b].age_ms < tmp.age_ms) { out[b + 1] = out[b]; b--; }
+        out[b + 1] = tmp;
+    }
+    return n;
 }
 
 const char *rm_strerror(int rc) {

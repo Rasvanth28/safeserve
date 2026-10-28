@@ -30,6 +30,8 @@ typedef struct {
     uint64_t ticket[N_MAX];        // Admission order (detect: victim tiebreak)
     uint64_t wait_ticket[N_MAX];   // Order of entering the wait loop (banker: FIFO fairness)
     struct timespec wait_since[N_MAX];
+    char label[N_MAX][24];         // Route of the request in each slot (for /metrics)
+    struct timespec started[N_MAX];
 
     server_mode_t mode;
     int admit_timeout_ms;
@@ -46,6 +48,7 @@ typedef struct {
     uint64_t deadlocks_found;
     uint64_t victims_aborted;
     uint64_t order_violations;
+    int peak[M_MAX];               // Highest units in use at once since startup
 
     pthread_mutex_t lock;
     pthread_cond_t cv;
@@ -56,6 +59,7 @@ typedef struct {
     char res_names[M_MAX][32];
     int total[M_MAX];
     int available[M_MAX];
+    int peak[M_MAX];
     int active_slots;
     int waiting_slots;
     uint64_t safety_checks;
@@ -64,6 +68,16 @@ typedef struct {
     uint64_t victims_aborted;
     uint64_t order_violations;
 } rm_snapshot_t;
+
+// One in-flight request, for the live view in /metrics.
+typedef struct {
+    int slot;
+    char label[24];
+    int alloc[M_MAX];
+    int request[M_MAX];            // Non-zero only while blocked
+    bool waiting;
+    double age_ms;
+} rm_inflight_t;
 
 // Detect mode starts the detector thread with detect_interval_ms.
 int rm_init(const resource_config_t *rc, server_mode_t mode, int admit_timeout_ms, int detect_interval_ms);
@@ -112,6 +126,12 @@ int rm_detect_and_recover(void);
 void rm_get_need(int slot, int need_out[M_MAX]);
 
 void rm_get_snapshot(rm_snapshot_t *out);
+
+// Tags a slot with the route it serves, shown by rm_list_inflight.
+void rm_set_label(int slot, const char *label);
+
+// Copies up to max_out active slots, oldest first. Returns how many were copied.
+int rm_list_inflight(rm_inflight_t *out, int max_out);
 
 // Human-readable name for an RM_* code.
 const char *rm_strerror(int rc);

@@ -14,6 +14,7 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <time.h>
+#include <ctype.h>
 
 // Runs admission control and the handler for one parsed request.
 // Returns the HTTP status sent and fills *admit_ms.
@@ -49,6 +50,13 @@ static int serve_request(server_context_t *ctx, int fd, const http_request_t *re
     if (slot < 0) {
         return send_error(fd, 503, "request slots exhausted");
     }
+    // Route label for the live view; keep it JSON-safe
+    char label[24];
+    snprintf(label, sizeof(label), "%s", req->path);
+    for (char *c = label; *c; c++) {
+        if (!(isalnum((unsigned char)*c) || *c == '/' || *c == '.' || *c == '_' || *c == '-')) *c = '_';
+    }
+    rm_set_label(slot, label);
     if (rm_register_claim(slot, claim) != RM_SUCCESS) {
         rm_free_slot(slot);
         return send_error(fd, 500, "route claim exceeds system capacity");
@@ -110,8 +118,12 @@ static void *worker_thread_fn(void *arg) {
         clock_gettime(CLOCK_MONOTONIC, &t_end);
         double total_ms = timespec_diff_ms(&job.t_accept, &t_end);
 
-        metrics_inc_status(status);
-        metrics_record_latency(total_ms);
+        // /metrics is the monitoring channel (the dashboard polls it every
+        // second); counting it would make the request counters tick on their own.
+        if (!(read_rc == 0 && strcmp(req.path, "/metrics") == 0)) {
+            metrics_inc_status(status);
+            metrics_record_latency(total_ms);
+        }
         log_request(read_rc == 0 ? req.path : "-", status, total_ms, queue_ms, admit_ms, req.body_len);
 
         http_free_request(&req);

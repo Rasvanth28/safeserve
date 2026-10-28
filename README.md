@@ -40,6 +40,17 @@ open http://localhost:8080/          # live dashboard
 
 Linux and macOS are supported. CI runs everything on Ubuntu, including the sanitizer builds.
 
+## Live demo
+
+All four strategies side by side, controlled entirely from the dashboard: switch strategy, restart a deadlocked server, toggle between the **classroom** setup (1 DB, 1 CLOCK, each upload/refresh holds its first resource for 4 s, so you can build a deadlock by clicking) and the **fast** one (the real configs).
+
+* **Locally:** double-click `Start Live Demo.app` (or run `make live`), then use http://localhost:8080/. "Stop demo" on the dashboard stops it.
+* **Hosted on Render:** [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/Rasvanth28/safeserve) uses `render.yaml` and the `Dockerfile`. Every visitor shares the same four servers, and the stop button is disabled.
+
+Try it: on **Naive**, click `POST /upload`, then within 4 s `POST /refresh`, and watch "who holds what" turn into a deadlock. Do the same on **Banker's**: `/refresh` is refused the free DB connection because granting it would be unsafe, and both requests finish.
+
+`tools/live_demo.py` runs one SafeServe per strategy (ports 8081-8084) behind a single front door, because a host like Render exposes only one port: `/naive/`, `/lockorder/`, `/detect/` and `/banker/` are forwarded to the matching server, and `/control/` restarts them.
+
 ## How it works
 
 ```

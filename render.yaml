@@ -1,0 +1,10 @@
+# Render Blueprint: deploys the SafeServe live demo as one Docker web service.
+# Render dashboard -> New -> Blueprint -> pick this repository.
+services:
+  - type: web
+    name: safeserve-demo
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /healthz
+    autoDeploy: true

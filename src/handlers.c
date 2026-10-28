@@ -117,7 +117,7 @@ int handle_health(int sock_fd, const http_request_t *req, const server_config_t 
 
 int handle_metrics(int sock_fd, const http_request_t *req, const server_config_t *cfg, int slot) {
     (void)slot;
-    char report[8192];
+    char report[16384];
     metrics_generate_report(report, sizeof(report), config_mode_name(cfg->mode),
                             config_admit_mode_name(cfg->admit_mode));
     http_send_response(sock_fd, 200, "application/json", report,

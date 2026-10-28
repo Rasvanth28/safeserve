@@ -5,6 +5,7 @@
 #   make e2e          start the server and test it over HTTP
 #   make demo         in-process deadlock demo: same workload under all four modes
 #   make demo-live    the same demo against the real HTTP server
+#   make live         live demo at http://localhost:8080/: all four strategies, controlled from the dashboard
 #   make bench        benchmark sweep -> results/bench.csv (see tools/bench.sh)
 #   make plot         charts from results/bench.csv
 #   make asan / tsan  tests under AddressSanitizer / ThreadSanitizer
@@ -69,6 +70,9 @@ demo: $(BIN)/demo_runner
 demo-live: $(BIN)/safeserve
 	SAFESERVE=$(BIN)/safeserve ./tools/deadlock_demo.sh
 
+live: $(BIN)/safeserve
+	SAFESERVE=$(BIN)/safeserve python3 tools/live_demo.py --open
+
 bench: $(BIN)/safeserve $(BIN)/loadgen
 	./tools/bench.sh
 
@@ -85,6 +89,6 @@ clean:
 	rm -rf build build-address build-thread build-undefined bin
 
 .SECONDARY:
-.PHONY: all test e2e demo demo-live bench plot asan tsan clean
+.PHONY: all test e2e demo demo-live live bench plot asan tsan clean
 
 -include $(shell find build build-* -name '*.d' 2>/dev/null)

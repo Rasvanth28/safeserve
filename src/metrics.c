@@ -200,11 +200,35 @@ void metrics_generate_report(char *buf, size_t max_len, const char *mode, const 
            "    \"waiting_slots\": %d,\n"
            "    \"table\": [\n", snap.active_slots, snap.waiting_slots);
     for (int j = 0; j < snap.m; j++) {
-        APPEND("      {\"name\": \"%s\", \"total\": %d, \"available\": %d, \"allocated\": %d}%s\n",
+        APPEND("      {\"name\": \"%s\", \"total\": %d, \"available\": %d, \"allocated\": %d, \"peak\": %d}%s\n",
                snap.res_names[j], snap.total[j], snap.available[j],
-               snap.total[j] - snap.available[j], j + 1 < snap.m ? "," : "");
+               snap.total[j] - snap.available[j], snap.peak[j], j + 1 < snap.m ? "," : "");
     }
-    APPEND("    ]\n  }\n}\n");
+    APPEND("    ]\n  },\n");
+
+    // Live view: each in-flight request, what it holds and what it waits for
+    rm_inflight_t fl[24];
+    int nfl = rm_list_inflight(fl, 24);
+    APPEND("  \"inflight\": [");
+    for (int k = 0; k < nfl; k++) {
+        APPEND("%s\n    {\"slot\": %d, \"route\": \"%s\", \"waiting\": %s, \"age_ms\": %.0f, \"holds\": {",
+               k ? "," : "", fl[k].slot, fl[k].label, fl[k].waiting ? "true" : "false", fl[k].age_ms);
+        bool first = true;
+        for (int j = 0; j < snap.m; j++) {
+            if (fl[k].alloc[j] <= 0) continue;
+            APPEND("%s\"%s\": %d", first ? "" : ", ", snap.res_names[j], fl[k].alloc[j]);
+            first = false;
+        }
+        APPEND("}, \"wants\": {");
+        first = true;
+        for (int j = 0; j < snap.m; j++) {
+            if (fl[k].request[j] <= 0) continue;
+            APPEND("%s\"%s\": %d", first ? "" : ", ", snap.res_names[j], fl[k].request[j]);
+            first = false;
+        }
+        APPEND("}}");
+    }
+    APPEND("%s]\n}\n", nfl ? "\n  " : "");
 #undef APPEND
 }
 

@@ -58,6 +58,27 @@
         }
         .badge-success { background: rgba(52, 211, 153, 0.15); color: var(--success); border: 1px solid rgba(52, 211, 153, 0.3); }
         .badge-primary { background: rgba(56, 189, 248, 0.15); color: var(--primary); border: 1px solid rgba(56, 189, 248, 0.3); }
+        .mode-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 20px;
+                    padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+        .mode-bar .lbl { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-right: 4px; }
+        .mode-link { font-size: 13px; font-weight: 600; padding: 6px 14px; border-radius: 9999px; text-decoration: none;
+                     border: 1px solid var(--border); color: var(--text); }
+        .mode-link:hover { background: var(--surface-hover); }
+        .mode-link.current { background: var(--primary); border-color: var(--primary); color: #0b1329; }
+        .mode-link.offline { opacity: 0.35; pointer-events: none; }
+        .mode-link.frozen { border-color: var(--danger); color: var(--danger); }
+        .mode-link .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; background: var(--muted); }
+        .mode-link .dot.up { background: var(--success); }
+        .mode-link .dot.frozen { background: var(--danger); }
+        .mode-link.current .dot.up { background: #065f46; }
+        .mode-bar .sep { width: 1px; align-self: stretch; background: var(--border); margin: 0 4px; }
+        .mode-bar .btn { padding: 6px 12px; font-size: 12px; }
+        .mode-bar .btn:disabled { opacity: 0.5; cursor: wait; transform: none; }
+        .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 9999px; overflow: hidden; }
+        .seg button { background: transparent; border: none; color: var(--text); font-size: 12px; font-weight: 600; padding: 6px 12px; cursor: pointer; }
+        .seg button.on { background: var(--accent); color: #fff; }
+        .mode-bar .hint { font-size: 12px; color: var(--muted); flex-basis: 100%; }
+        .mode-bar .hint:empty { display: none; }
         .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--success); animation: pulse 1.8s infinite; }
         @keyframes pulse { 0% { transform: scale(0.9); opacity: 0.8; } 50% { transform: scale(1.3); opacity: 1; } 100% { transform: scale(0.9); opacity: 0.8; } }
 
@@ -91,8 +112,10 @@
         /* Progress bars */
         .res-row { margin-bottom: 14px; }
         .res-label { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 6px; }
-        .res-track { width: 100%; height: 8px; background: rgba(255, 255, 255, 0.08); border-radius: 9999px; overflow: hidden; }
-        .res-fill { height: 100%; border-radius: 9999px; transition: width 0.4s ease; }
+        .res-track { position: relative; width: 100%; height: 8px; background: rgba(255, 255, 255, 0.08); border-radius: 9999px; overflow: hidden; }
+        .res-fill { position: absolute; left: 0; top: 0; height: 100%; border-radius: 9999px; transition: width 0.4s ease; }
+        .res-peak { opacity: 0.3; }
+        .res-peak-text { color: var(--muted); font-weight: 400; }
 
         /* Buttons & Controls */
         .btn {
@@ -124,6 +147,27 @@
         .log-time { color: var(--muted); }
         .log-200 { color: var(--success); }
         .log-503 { color: var(--danger); }
+        .inflight { margin-top: 16px; }
+        .inflight h4 { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+        .inflight-row { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; margin-bottom: 6px; font-size: 13px; }
+        .inflight-row.waiting { border-color: var(--warning); }
+        .inflight-row .top { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+        .inflight-row .route { font-family: var(--font-mono); font-weight: 700; }
+        .inflight-row .age { font-family: var(--font-mono); color: var(--muted); font-size: 12px; }
+        .chip { display: inline-block; font-family: var(--font-mono); font-size: 12px; padding: 1px 8px; border-radius: 6px; margin: 2px 4px 2px 0; }
+        .chip.hold { background: rgba(52, 211, 153, 0.15); color: var(--success); border: 1px solid var(--success); }
+        .chip.want { background: rgba(251, 191, 36, 0.15); color: var(--warning); border: 1px solid var(--warning); }
+        .chip.minor { color: var(--muted); border: 1px solid var(--border); }
+        .inflight-why { font-size: 12px; color: var(--muted); margin-top: 4px; }
+        .classroom-tip { font-size: 12.5px; background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.35);
+                         border-radius: 8px; padding: 10px 12px; margin-bottom: 14px; }
+        .rm-status { margin-top: 18px; padding: 12px 14px; border-radius: 10px; font-size: 13px;
+                     border: 1px solid var(--border); background: rgba(255, 255, 255, 0.03); }
+        .rm-status strong { display: block; font-size: 15px; margin-bottom: 4px; }
+        .rm-status.ok strong { color: var(--success); }
+        .rm-status.busy strong { color: var(--warning); }
+        .rm-status.deadlock { border-color: var(--danger); background: rgba(248, 113, 113, 0.12); }
+        .rm-status.deadlock strong { color: var(--danger); }
 
         /* Flow diagram */
         .flow-box {
@@ -137,6 +181,46 @@
         .flow-arrow { color: var(--muted); font-size: 18px; }
 
         .hidden { display: none; }
+
+        /* Learn tab: step-by-step strategy walkthrough */
+        .learn-modes { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+        .learn-mode { background: transparent; border: 1px solid var(--border); color: var(--text); padding: 10px 16px;
+                      border-radius: 9999px; font-size: 14px; font-weight: 600; cursor: pointer; }
+        .learn-mode.active { background: var(--primary); border-color: var(--primary); color: #0b1329; }
+        .learn-intro { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; font-size: 13px; }
+        .learn-intro div { background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+        .learn-intro b { display: block; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+        .learn-scenario { font-size: 13px; color: var(--muted); margin-top: 12px; }
+        .learn-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 16px; }
+        .learn-counter { margin-left: auto; font-family: var(--font-mono); font-size: 13px; color: var(--muted); }
+        .learn-svg { width: 100%; height: auto; display: block; }
+        .learn-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+        .learn-card { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 13px; }
+        .learn-card .who { font-weight: 700; margin-bottom: 6px; }
+        .learn-chip { display: inline-block; font-family: var(--font-mono); font-size: 12px; padding: 2px 8px; border-radius: 6px;
+                      border: 1px solid var(--border); margin-right: 4px; }
+        .learn-chip.held { background: rgba(52, 211, 153, 0.15); border-color: var(--success); color: var(--success); }
+        .learn-chip.wait { background: rgba(251, 191, 36, 0.15); border-color: var(--warning); color: var(--warning); }
+        .learn-chip.lost { background: rgba(248, 113, 113, 0.15); border-color: var(--danger); color: var(--danger); text-decoration: line-through; }
+        .learn-status { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 9999px; margin-top: 8px; }
+        .learn-title { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+        .learn-text { font-size: 14px; line-height: 1.6; margin-bottom: 14px; }
+        .learn-verdict { display: inline-block; font-weight: 800; font-size: 13px; letter-spacing: 0.5px; padding: 4px 12px;
+                         border-radius: 9999px; margin-bottom: 12px; }
+        .learn-rule { background: #090d16; border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px;
+                      font-family: var(--font-mono); font-size: 12.5px; line-height: 1.7; }
+        .learn-rule .h { color: var(--primary); font-weight: 700; }
+        .learn-rule .ok { color: var(--success); }
+        .learn-rule .no { color: var(--danger); }
+        .learn-rule table { margin: 6px 0 10px; font-size: 12px; }
+        .learn-rule th, .learn-rule td { padding: 4px 8px; }
+        .learn-steps { list-style: none; font-size: 13px; max-height: 260px; overflow-y: auto; }
+        .learn-steps li { padding: 7px 10px; border-radius: 6px; cursor: pointer; color: var(--muted); display: flex; gap: 10px; }
+        .learn-steps li:hover { background: var(--surface-hover); }
+        .learn-steps li.current { background: var(--primary-glow); color: var(--text); }
+        .learn-steps li.future { opacity: 0.45; }
+        .learn-steps .n { font-family: var(--font-mono); min-width: 22px; }
+        .learn-compare td, .learn-compare th { text-align: left; font-family: inherit; font-size: 13px; }
     </style>
 </head>
 <body>
@@ -152,14 +236,33 @@
             </div>
             <div class="badge-bar">
                 <div class="badge badge-success"><span class="pulse"></span> Online</div>
-                <div class="badge badge-primary">Strategy: Banker's Avoidance</div>
-                <div class="badge badge-primary">Mode: Atomic Reservation</div>
+                <div class="badge badge-primary" id="badge-strategy">Strategy: …</div>
+                <div class="badge badge-primary" id="badge-admit">Admission: …</div>
             </div>
         </header>
+
+        <!-- Demo controls: one server per strategy, run by tools/live_demo.py (control API on :8080) -->
+        <nav class="mode-bar">
+            <span class="lbl">Strategy</span>
+            <a class="mode-link" data-mode="naive" data-port="8081"><span class="dot"></span>1 · Naive</a>
+            <a class="mode-link" data-mode="lockorder" data-port="8082"><span class="dot"></span>2 · Lock ordering</a>
+            <a class="mode-link" data-mode="detect" data-port="8083"><span class="dot"></span>3 · Detection</a>
+            <a class="mode-link" data-mode="banker" data-port="8084"><span class="dot"></span>4 · Banker's</a>
+            <span class="sep ctl hidden"></span>
+            <button class="btn btn-outline ctl hidden" id="ctl-restart" onclick="ctlRestart(pageMode())" title="Start this strategy's server fresh: clears a deadlock and all counters">↻ Restart this server</button>
+            <button class="btn btn-outline ctl hidden" onclick="ctlRestart('all')" title="Start all four servers fresh">↻ Restart all</button>
+            <span class="seg ctl hidden" title="Classroom: 1 DB, 1 CLOCK, 4 s holds (build a deadlock by clicking). Fast: real settings.">
+                <button data-setup="classroom" onclick="ctlSetup('classroom')">🐢 Classroom</button>
+                <button data-setup="fast" onclick="ctlSetup('fast')">⚡ Fast</button>
+            </span>
+            <button class="btn btn-outline ctl hidden" id="ctl-stop" onclick="ctlStop()" title="Stop all four servers">■ Stop demo</button>
+            <span class="hint" id="mode-hint"></span>
+        </nav>
 
         <!-- Navigation Tabs -->
         <div class="tabs">
             <button class="tab-btn active" onclick="switchTab('dashboard')">Live Dashboard & Telemetry</button>
+            <button class="tab-btn" onclick="switchTab('learn')">🎓 How the 4 Strategies Work</button>
             <button class="tab-btn" onclick="switchTab('banker')">Banker's Algorithm Visualizer</button>
             <button class="tab-btn" onclick="switchTab('deadlock')">Deadlock vs. Avoidance Architecture</button>
         </div>
@@ -207,12 +310,16 @@
                         <button class="btn btn-outline" style="padding: 4px 10px; font-size: 11px;" onclick="fetchMetrics()">Refresh</button>
                     </div>
 
+                    <div style="font-size: 12px; color: var(--muted); margin: -4px 0 12px;">
+                        Solid bar = in use now · faded bar = peak (most in use at once) since the server started
+                    </div>
+
                     <div class="res-row">
                         <div class="res-label">
                             <span>WORKER (Worker Threads)</span>
                             <span id="label-worker">0 / 16 held</span>
                         </div>
-                        <div class="res-track"><div id="bar-worker" class="res-fill" style="width: 0%; background: var(--primary);"></div></div>
+                        <div class="res-track"><div id="peak-worker" class="res-fill res-peak" style="width: 0%; background: var(--primary);"></div><div id="bar-worker" class="res-fill" style="width: 0%; background: var(--primary);"></div></div>
                     </div>
 
                     <div class="res-row">
@@ -220,7 +327,7 @@
                             <span>BUF (Buffer Memory)</span>
                             <span id="label-buf">0 / 64 held</span>
                         </div>
-                        <div class="res-track"><div id="bar-buf" class="res-fill" style="width: 0%; background: var(--accent);"></div></div>
+                        <div class="res-track"><div id="peak-buf" class="res-fill res-peak" style="width: 0%; background: var(--accent);"></div><div id="bar-buf" class="res-fill" style="width: 0%; background: var(--accent);"></div></div>
                     </div>
 
                     <div class="res-row">
@@ -228,7 +335,7 @@
                             <span>FD (File Descriptors)</span>
                             <span id="label-fd">0 / 128 held</span>
                         </div>
-                        <div class="res-track"><div id="bar-fd" class="res-fill" style="width: 0%; background: #3b82f6;"></div></div>
+                        <div class="res-track"><div id="peak-fd" class="res-fill res-peak" style="width: 0%; background: #3b82f6;"></div><div id="bar-fd" class="res-fill" style="width: 0%; background: #3b82f6;"></div></div>
                     </div>
 
                     <div class="res-row">
@@ -236,7 +343,7 @@
                             <span>DB (Database Connections)</span>
                             <span id="label-db">0 / 4 held</span>
                         </div>
-                        <div class="res-track"><div id="bar-db" class="res-fill" style="width: 0%; background: var(--warning);"></div></div>
+                        <div class="res-track"><div id="peak-db" class="res-fill res-peak" style="width: 0%; background: var(--warning);"></div><div id="bar-db" class="res-fill" style="width: 0%; background: var(--warning);"></div></div>
                     </div>
 
                     <div class="res-row">
@@ -244,7 +351,17 @@
                             <span>CLOCK (Cache Write Locks)</span>
                             <span id="label-clock">0 / 2 held</span>
                         </div>
-                        <div class="res-track"><div id="bar-clock" class="res-fill" style="width: 0%; background: var(--danger);"></div></div>
+                        <div class="res-track"><div id="peak-clock" class="res-fill res-peak" style="width: 0%; background: var(--danger);"></div><div id="bar-clock" class="res-fill" style="width: 0%; background: var(--danger);"></div></div>
+                    </div>
+
+                    <div id="rm-status" class="rm-status ok">
+                        <strong id="rm-status-title">Idle</strong>
+                        <span id="rm-status-detail">No requests in progress.</span>
+                    </div>
+
+                    <div class="inflight">
+                        <h4>Requests in progress — who holds what</h4>
+                        <div id="inflight-list" style="font-size: 13px; color: var(--muted);">None right now.</div>
                     </div>
                 </div>
 
@@ -256,13 +373,20 @@
                     <p style="font-size: 13px; color: var(--muted); margin-bottom: 14px;">
                         Send requests directly into SafeServe's admission controller:
                     </p>
+                    <div class="classroom-tip hidden" id="classroom-tip">
+                        <strong>Classroom mode:</strong> 1 DB connection, 1 cache lock, and every upload/refresh
+                        <strong>holds its first resource for 4 s</strong> before asking for the second.
+                        Try: click <strong>POST /upload</strong> (it takes CLOCK), then within 4 s click
+                        <strong>POST /refresh</strong> (it takes DB) — and watch "who holds what" below the bars.
+                    </div>
 
                     <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px;">
                         <button class="btn btn-outline" onclick="sendReq('/health', 'GET')">GET /health (0 claim)</button>
                         <button class="btn btn-outline" onclick="sendReq('/query', 'GET')">GET /query (DB:1)</button>
-                        <button class="btn btn-outline" onclick="sendReq('/upload', 'POST')">POST /upload (CLOCK:1)</button>
-                        <button class="btn btn-outline" onclick="sendReq('/refresh', 'POST')">POST /refresh (DB:1, CLOCK:1)</button>
+                        <button class="btn btn-outline" onclick="sendReq('/upload', 'POST')">POST /upload (CLOCK→DB)</button>
+                        <button class="btn btn-outline" onclick="sendReq('/refresh', 'POST')">POST /refresh (DB→CLOCK)</button>
                         <button class="btn btn-warning" onclick="sendStressBurst()">🚀 Burst 15 Concurrent Requests</button>
+                        <button class="btn btn-danger" id="trigger-btn" onclick="triggerDeadlock()">💥 Deadlock Trigger: 2 × upload + 4 × refresh at once</button>
                     </div>
 
                     <div class="console" id="live-console">
@@ -369,6 +493,89 @@
                 </div>
             </div>
         </div>
+        <!-- TAB: Learn how the four strategies work, one step at a time -->
+        <div id="tab-learn" class="hidden">
+            <div class="card" style="margin-bottom: 20px;">
+                <div class="card-header">
+                    <span class="card-title">How the 4 strategies work — step by step</span>
+                </div>
+                <div class="learn-modes" id="learn-modes">
+                    <button class="learn-mode" data-mode="naive" onclick="learnSetMode('naive')">1 · Naive (no handling)</button>
+                    <button class="learn-mode" data-mode="lockorder" onclick="learnSetMode('lockorder')">2 · Lock ordering (prevention)</button>
+                    <button class="learn-mode" data-mode="detect" onclick="learnSetMode('detect')">3 · Detection &amp; recovery</button>
+                    <button class="learn-mode" data-mode="banker" onclick="learnSetMode('banker')">4 · Banker's (avoidance)</button>
+                </div>
+                <div class="learn-intro" id="learn-intro"></div>
+                <p class="learn-scenario">
+                    <strong style="color: var(--text);">Scenario (same for all four):</strong>
+                    1 database connection (<code>DB</code>) and 1 cache lock (<code>CLOCK</code>).
+                    <span style="color: #fbbf24;">R1 = POST /refresh</span> takes DB, then CLOCK.
+                    <span style="color: #c084fc;">R2 = POST /upload</span> takes CLOCK, then DB.
+                    Both declare a maximum claim of 1 DB + 1 CLOCK. This is the workload of <code>make demo</code>.
+                </p>
+            </div>
+
+            <div class="learn-controls">
+                <button class="btn btn-outline" onclick="learnGo(0)">⏮ Restart</button>
+                <button class="btn btn-outline" onclick="learnGo(learn.i - 1)">◀ Back</button>
+                <button class="btn btn-primary" onclick="learnGo(learn.i + 1)">Next step ▶</button>
+                <button class="btn btn-outline" id="learn-play" onclick="learnTogglePlay()">▶ Auto-play</button>
+                <span class="learn-counter" id="learn-counter"></span>
+            </div>
+
+            <div class="grid-2">
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">Resource-allocation graph</span>
+                    </div>
+                    <svg class="learn-svg" id="learn-svg" viewBox="0 0 540 300" role="img" aria-label="Resource-allocation graph"></svg>
+                    <div style="font-size: 12px; color: var(--muted); margin-top: 6px;">
+                        <span style="color: var(--success);">━━▶</span> resource is <strong>held by</strong> the request &nbsp;·&nbsp;
+                        <span style="color: var(--warning);">╍╍▶</span> request is <strong>waiting for</strong> the resource &nbsp;·&nbsp;
+                        <span style="color: var(--danger);">red</span> = cycle = deadlock
+                    </div>
+                    <div class="learn-cards" id="learn-cards"></div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">What just happened</span>
+                    </div>
+                    <div id="learn-verdict"></div>
+                    <div class="learn-title" id="learn-title"></div>
+                    <div class="learn-text" id="learn-text"></div>
+                    <div class="learn-rule" id="learn-rule"></div>
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">All steps (click to jump)</span>
+                    </div>
+                    <ol class="learn-steps" id="learn-steps"></ol>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">Same scenario, four outcomes</span>
+                    </div>
+                    <div class="table-wrap">
+                        <table class="learn-compare">
+                            <tr><th>Strategy</th><th>Outcome</th><th>Price paid</th></tr>
+                            <tr><td style="color: var(--danger);">Naive</td><td>Deadlock — both stuck forever</td><td>The server freezes</td></tr>
+                            <tr><td style="color: var(--success);">Lock ordering</td><td>Both finish</td><td>Every handler must follow one global order</td></tr>
+                            <tr><td style="color: var(--warning);">Detection</td><td>One finishes, one aborted (503)</td><td>Victim's work is thrown away</td></tr>
+                            <tr><td style="color: var(--primary);">Banker's</td><td>Both finish</td><td>Sometimes waits even when the resource is free</td></tr>
+                        </table>
+                    </div>
+                    <p style="font-size: 12px; color: var(--muted); margin-top: 12px;">
+                        Try it on the real server: pick a strategy in the bar at the top, then on the Live Dashboard tab
+                        click <strong>POST /upload</strong> and, within 4 s, <strong>POST /refresh</strong>.
+                        Keyboard: <kbd>←</kbd> / <kbd>→</kbd> step through.
+                    </p>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -378,6 +585,7 @@
             document.getElementById('tab-dashboard').classList.add('hidden');
             document.getElementById('tab-banker').classList.add('hidden');
             document.getElementById('tab-deadlock').classList.add('hidden');
+            document.getElementById('tab-learn').classList.add('hidden');
 
             document.getElementById('tab-' + tabId).classList.remove('hidden');
             event.target.classList.add('active');
@@ -394,15 +602,31 @@
             c.scrollTop = c.scrollHeight;
         }
 
+        // Behind the demo front door (tools/live_demo.py, locally or on Render) each
+        // strategy lives under its own path, e.g. /naive/; opened straight from a
+        // server's port there is no prefix.
+        const FRONT_MODE = (location.pathname.match(/^\/(naive|lockorder|detect|banker)\//) || [])[1];
+        const BASE = FRONT_MODE ? '/' + FRONT_MODE : '';
+
         // Fetch metrics from SafeServe backend
         let lastPoll = null;
+        // Classroom configs (1 DB) hold resources for seconds, so requests take longer
+        let classroom = false;
+        const requestTimeoutMs = () => classroom ? 12000 : 4000;
 
         async function fetchMetrics() {
             try {
-                const res = await fetch('/metrics');
+                const res = await fetch(BASE + '/metrics');
                 if (!res.ok) throw new Error('Status ' + res.status);
                 const data = await res.json();
 
+                const strategyNames = { banker: "Banker's Avoidance", lockorder: 'Lock Ordering',
+                                        detect: 'Detection & Recovery', naive: 'Naive (none)' };
+                document.getElementById('badge-strategy').innerText =
+                    'Strategy: ' + (strategyNames[data.mode] || data.mode);
+                markCurrentMode(data.mode);
+                document.getElementById('badge-admit').innerText =
+                    'Admission: ' + (data.admit_mode === 'atomic' ? 'Atomic Reservation' : 'Incremental');
                 document.getElementById('stat-total').innerText = data.requests.total;
                 document.getElementById('stat-2xx').innerText = data.requests.status_2xx;
                 document.getElementById('stat-5xx').innerText = data.requests.status_5xx;
@@ -413,11 +637,23 @@
                     const key = row.name.toLowerCase();
                     const bar = document.getElementById('bar-' + key);
                     const label = document.getElementById('label-' + key);
+                    const peakBar = document.getElementById('peak-' + key);
                     if (!bar || !label) return;
-                    const pct = row.total > 0 ? (row.allocated / row.total) * 100 : 0;
-                    bar.style.width = Math.min(pct, 100) + '%';
-                    label.innerText = `${row.allocated} / ${row.total} held`;
+                    const pct = v => row.total > 0 ? Math.min((v / row.total) * 100, 100) : 0;
+                    bar.style.width = pct(row.allocated) + '%';
+                    if (peakBar) peakBar.style.width = pct(row.peak || 0) + '%';
+                    label.innerHTML = `${row.allocated} / ${row.total} held` +
+                        ` <span class="res-peak-text">· peak ${row.peak || 0}</span>`;
                 });
+
+                const db = (data.resources.table || []).find(r => r.name === 'DB');
+                classroom = !!db && db.total === 1;
+                document.getElementById('classroom-tip').classList.toggle('hidden', !classroom);
+                document.getElementById('trigger-btn').innerText = classroom
+                    ? '💥 Deadlock Trigger: 1 × upload + 1 × refresh at once'
+                    : '💥 Deadlock Trigger: 2 × upload + 4 × refresh at once';
+                updateRmStatus(data);
+                renderInflight(data);
 
                 // Request rate since the previous poll
                 const now = performance.now();
@@ -433,33 +669,224 @@
             }
         }
 
+        // Demo controls. tools/live_demo.py runs one server per strategy
+        // (ports 8081-8084) and a control API on :8080 that restarts them.
+        // Without it, the mode bar falls back to probing the ports directly.
+        const CONTROL = FRONT_MODE ? '/control' : `${location.protocol}//${location.hostname}:8080/control`;
+        let controlUp = false;
+        const pageMode = () => FRONT_MODE || (document.querySelector(`.mode-link[data-port="${location.port}"]`) || {}).dataset?.mode;
+
+        function markCurrentMode(mode) {
+            document.querySelectorAll('.mode-link').forEach(a => a.classList.toggle('current', a.dataset.mode === mode));
+        }
+
+        async function probeModeServers() {
+            const links = [...document.querySelectorAll('.mode-link')];
+            links.forEach(a => a.href = FRONT_MODE ? `/${a.dataset.mode}/` : `${location.protocol}//${location.hostname}:${a.dataset.port}/`);
+            const hint = document.getElementById('mode-hint');
+            let st = null;
+            try {
+                st = await (await fetch(CONTROL + '/status', { signal: AbortSignal.timeout(2500) })).json();
+            } catch (e) { /* no controller running */ }
+            controlUp = !!st;
+            document.querySelectorAll('.ctl').forEach(el => el.classList.toggle('hidden', !controlUp));
+
+            if (st) {
+                document.getElementById('ctl-stop').classList.toggle('hidden', !!st.hosted);
+                document.querySelectorAll('.seg button').forEach(b => b.classList.toggle('on', b.dataset.setup === st.setup));
+                const frozen = [];
+                st.servers.forEach(s => {
+                    const a = links.find(l => l.dataset.mode === s.mode);
+                    if (!a) return;
+                    const state = s.responding ? 'up' : s.running ? 'frozen' : 'down';
+                    a.querySelector('.dot').className = 'dot ' + state;
+                    a.classList.toggle('frozen', state === 'frozen');
+                    a.classList.toggle('offline', state === 'down');
+                    a.dataset.state = state;
+                    if (state === 'frozen') frozen.push(a.textContent.trim());
+                });
+                hint.innerText = frozen.length
+                    ? `${frozen.join(', ')} is frozen by a deadlock (every worker is stuck, so even its page can't load). Click it to restart it fresh.`
+                    : '';
+                return;
+            }
+            // Fallback: no controller, just see which ports answer
+            let online = 0;
+            await Promise.all(links.map(async a => {
+                try {
+                    await fetch(a.href + 'metrics', { mode: 'no-cors', signal: AbortSignal.timeout(1500) });
+                    a.classList.remove('offline'); online++;
+                } catch (e) { a.classList.add('offline'); }
+            }));
+            hint.innerText = online === 4 ? '' :
+                'For the full demo with restart buttons, double-click "Start Live Demo" in the project folder.';
+        }
+
+        // A frozen server can't serve its own page: offer to restart it first
+        document.addEventListener('click', async e => {
+            const a = e.target.closest('.mode-link');
+            if (!a || a.dataset.state !== 'frozen') return;
+            e.preventDefault();
+            if (!confirm(`${a.textContent.trim()} is frozen by a deadlock. Restart it fresh and open it?`)) return;
+            await ctlRestart(a.dataset.mode, true);
+            location.href = a.href;
+        });
+
+        async function ctlCall(path, label) {
+            const btns = document.querySelectorAll('.mode-bar button');
+            btns.forEach(b => b.disabled = true);
+            logToConsole(`${label}...`, 'log-time');
+            try {
+                await fetch(CONTROL + path, { method: 'POST', signal: AbortSignal.timeout(20000) });
+                // Fresh server: forget what the previous one reported
+                lastPoll = null; allWaitingPolls = 0;
+                logToConsole(`${label}: done.`, 'log-200');
+            } catch (e) {
+                logToConsole(`${label} failed: ${e.message}`, 'log-503');
+            }
+            btns.forEach(b => b.disabled = false);
+            fetchMetrics();
+            probeModeServers();
+        }
+
+        function ctlRestart(mode, quiet) {
+            const names = { all: 'all four servers', naive: 'Naive', lockorder: 'Lock ordering', detect: 'Detection', banker: "Banker's" };
+            return ctlCall(`/restart?mode=${mode}`, `↻ Restarting ${names[mode] || mode}${quiet ? '' : ' (fresh start, counters reset)'}`);
+        }
+
+        function ctlSetup(value) {
+            const what = value === 'classroom'
+                ? '🐢 Classroom setup: 1 DB, 1 CLOCK, 4 s holds — restarting all four servers'
+                : '⚡ Fast setup: 4 DB, 2 CLOCK, real speed — restarting all four servers';
+            return ctlCall(`/setup?value=${value}`, what);
+        }
+
+        async function ctlStop() {
+            if (!confirm('Stop all four servers? Double-click "Start Live Demo" to start again.')) return;
+            try { await fetch(CONTROL + '/shutdown', { method: 'POST' }); } catch (e) { /* it exits right away */ }
+            document.body.innerHTML = `<div style="max-width: 560px; margin: 120px auto; text-align: center;">
+                <h1 style="margin-bottom: 12px;">Demo stopped</h1>
+                <p style="color: var(--muted);">All four servers are stopped. To start again, double-click
+                <strong>Start Live Demo</strong> in the project folder.</p></div>`;
+        }
+
         // Send HTTP request to backend
         async function sendReq(endpoint, method = 'GET') {
             logToConsole(`Dispatching ${method} ${endpoint}...`);
             const t0 = performance.now();
             try {
-                const opts = { method: method };
+                // Give up eventually: a deadlocked request never answers, and the
+                // browser only allows 6 open connections, which the dashboard needs too.
+                const limit = requestTimeoutMs();
+                const opts = { method: method, signal: AbortSignal.timeout(limit) };
                 if (method === 'POST') opts.body = 'sample_payload';
-                const res = await fetch(endpoint, opts);
+                const res = await fetch(BASE + endpoint, opts);
                 const t1 = performance.now();
                 const latency = (t1 - t0).toFixed(1);
                 const data = await res.text();
                 logToConsole(`${method} ${endpoint} ➔ ${res.status} ${res.statusText} (${latency}ms): ${data.trim()}`, res.status === 200 ? 'log-200' : 'log-503');
                 fetchMetrics();
+                return res.status;
             } catch (err) {
                 const t1 = performance.now();
-                logToConsole(`${method} ${endpoint} ➔ Network call (${(t1 - t0).toFixed(1)}ms): ${err.message}`, 'log-503');
+                const stuck = err.name === 'TimeoutError';
+                logToConsole(`${method} ${endpoint} ➔ ${stuck ? `NO ANSWER after ${limit / 1000} s (request is stuck)` : 'Network call: ' + err.message} (${(t1 - t0).toFixed(1)}ms)`, 'log-503');
+                return 'no answer';
             }
         }
 
         // Burst 15 concurrent requests
-        function sendStressBurst() {
+        async function sendStressBurst() {
             logToConsole(`Launching burst of 15 concurrent requests across /query, /upload, /refresh...`, 'log-time');
             const endpoints = ['/query', '/upload', '/refresh', '/health', '/static/index.html'];
+            const pending = [];
             for (let i = 0; i < 15; i++) {
                 const ep = endpoints[i % endpoints.length];
                 const method = (ep === '/upload' || ep === '/refresh') ? 'POST' : 'GET';
-                sendReq(ep, method);
+                pending.push(sendReq(ep, method));
+            }
+            // Summarise the burst once every request has answered (or failed)
+            const counts = {};
+            (await Promise.all(pending)).forEach(st => { counts[st] = (counts[st] || 0) + 1; });
+            const summary = Object.entries(counts).map(([st, n]) => `${n} × ${st}`).join(', ');
+            logToConsole(`Burst finished: ${summary}`, counts[200] === 15 ? 'log-200' : 'log-503');
+        }
+
+        // The exact circular-wait pattern: uploads take CLOCK then DB, refreshes take
+        // DB then CLOCK. With 4 DB and 2 CLOCK, naive mode deadlocks; the others don't.
+        async function triggerDeadlock() {
+            // Enough requests to take every DB and every CLOCK: 2 + 4 normally, 1 + 1 in classroom mode
+            const [nUp, nRef] = classroom ? [1, 1] : [2, 4];
+            const n = nUp + nRef;
+            logToConsole(`💥 Firing ${nUp} × POST /upload (CLOCK→DB) + ${nRef} × POST /refresh (DB→CLOCK) at the same moment...`, 'log-time');
+            const pending = [];
+            for (let i = 0; i < nUp; i++) pending.push(sendReq('/upload', 'POST'));
+            for (let i = 0; i < nRef; i++) pending.push(sendReq('/refresh', 'POST'));
+            const results = await Promise.all(pending);
+            const ok = results.filter(r => r === 200).length;
+            const stuck = results.filter(r => r === 'no answer').length;
+            if (stuck > 0) {
+                logToConsole(`RESULT: DEADLOCK — ${stuck} of ${n} requests never answered. They still hold DB and CLOCK on the server.`, 'log-503');
+            } else {
+                logToConsole(`RESULT: no deadlock — ${ok} of ${n} succeeded, ${n - ok} got an explicit 503.`, 'log-200');
+            }
+        }
+
+        // Live list of in-flight requests from /metrics: what each one holds,
+        // what it is waiting for, and why.
+        function renderInflight(data) {
+            const box = document.getElementById('inflight-list');
+            const list = (data.inflight || []).filter(r => r.route !== '/metrics');
+            if (!list.length) { box.innerHTML = 'None right now.'; return; }
+            const key = ['DB', 'CLOCK'];
+            const holderOf = (res, self) => list.find(o => o !== self && (o.holds[res] || 0) > 0);
+            box.innerHTML = list.slice(0, 8).map(r => {
+                const holds = Object.keys(r.holds);
+                const chips = holds.filter(h => key.includes(h)).map(h => `<span class="chip hold">holds ${h}</span>`).join('') +
+                    (holds.some(h => !key.includes(h)) ? `<span class="chip minor">+ ${holds.filter(h => !key.includes(h)).join(', ')}</span>` : '');
+                const wants = Object.keys(r.wants);
+                let why = '';
+                if (r.waiting && wants.length) {
+                    const w = wants[0];
+                    const h = holderOf(w, r);
+                    why = h ? `Waiting for ${w}, which ${h.route} (#${h.slot}) is holding.`
+                        : data.mode === 'banker' ? `${w} is free, but Banker's refused it: granting it now would be unsafe.`
+                        : `Waiting for ${w}.`;
+                } else if (holds.some(h => key.includes(h))) {
+                    why = 'Working — holding its resource before asking for the next one.';
+                }
+                return `<div class="inflight-row ${r.waiting ? 'waiting' : ''}">
+                    <div class="top"><span class="route">#${r.slot} ${r.route}</span><span class="age">${(r.age_ms / 1000).toFixed(1)} s</span></div>
+                    <div>${chips}${wants.map(w => `<span class="chip want">waiting for ${w}</span>`).join('')}</div>
+                    ${why ? `<div class="inflight-why">${why}</div>` : ''}</div>`;
+            }).join('') + (list.length > 8 ? `<div>…and ${list.length - 8} more</div>` : '');
+        }
+
+        // Deadlock = requests are in progress and every one of them is waiting,
+        // and that has stayed true across polls.
+        let allWaitingPolls = 0;
+        function updateRmStatus(data) {
+            const r = data.resources;
+            const box = document.getElementById('rm-status');
+            const title = document.getElementById('rm-status-title');
+            const detail = document.getElementById('rm-status-detail');
+            const counters = `Unsafe grants refused: ${data.banker.unsafe_denials} · ` +
+                `deadlocks found: ${data.detect.deadlocks_found} · victims aborted: ${data.detect.victims_aborted}`;
+            allWaitingPolls = (r.active_slots > 0 && r.waiting_slots === r.active_slots) ? allWaitingPolls + 1 : 0;
+            if (allWaitingPolls >= 3) {
+                box.className = 'rm-status deadlock';
+                title.innerText = '⛔ DEADLOCKED';
+                detail.innerHTML = `${r.waiting_slots} requests are holding resources and waiting for each other — none can ever finish. ` +
+                    `Only zero-claim routes (/health, /metrics) still work. Restart the server to recover.` +
+                    (controlUp ? `<br><button class="btn btn-danger" style="margin-top: 10px;" onclick="ctlRestart(pageMode())">↻ Restart this server</button>` : '');
+            } else if (r.active_slots > 0) {
+                box.className = 'rm-status busy';
+                title.innerText = 'Working';
+                detail.innerText = `${r.active_slots} request(s) in progress, ${r.waiting_slots} waiting. ${counters}`;
+            } else {
+                box.className = 'rm-status ok';
+                title.innerText = 'Idle — no deadlock';
+                detail.innerText = counters;
             }
         }
 
@@ -566,7 +993,382 @@
         // Initialize
         renderBankerTable();
         fetchMetrics();
-        setInterval(fetchMetrics, 3000);
+        setInterval(fetchMetrics, 1000);
+        probeModeServers();
+        setInterval(probeModeServers, 3000);
+    </script>
+    <script>
+        // ---------------------------------------------------------------------
+        // Learn tab: a tiny simulator of the resource manager. It applies the
+        // same grant rules as src/naive.c, src/lockorder.c, src/detect.c and
+        // src/banker.c to the two-request workload of `make demo`, and records
+        // every decision as a step with an explanation.
+        // ---------------------------------------------------------------------
+        const L_RES = ['DB', 'CLOCK'];
+        const L_ORDER = { DB: 3, CLOCK: 4 };          // index in the global order WORKER<BUF<FD<DB<CLOCK
+        const L_TOTAL = [1, 1];
+        const L_ACTORS = [
+            { id: 'R1', route: '/refresh', plan: [0, 1], color: '#fbbf24' },
+            { id: 'R2', route: '/upload',  plan: [1, 0], color: '#c084fc' },
+        ];
+        const L_MAX = [[1, 1], [1, 1]];
+
+        const L_INTRO = {
+            naive: {
+                idea: 'No rules. If the resource is free, take it. If not, wait — forever.',
+                analogy: 'Cooks grab whatever tool is free and never put anything down until their dish is done.',
+                condition: 'Breaks none of the four Coffman conditions, so deadlock is possible.',
+            },
+            lockorder: {
+                idea: 'Prevention. Everyone must take resources in one fixed global order: DB before CLOCK. A cycle needs someone to go "backwards", which is never allowed.',
+                analogy: 'A rule on the kitchen wall: "always take the stove before the knife".',
+                condition: 'Breaks circular wait.',
+            },
+            detect: {
+                idea: 'Detection and recovery. Take what is free; a detector thread checks every 200 ms for requests that can never finish, and aborts one (the victim).',
+                analogy: 'A manager walks round, spots two cooks stuck on each other, sends one home. That dish goes in the bin.',
+                condition: 'Lets deadlock happen, then breaks it by force (pre-emption).',
+            },
+            banker: {
+                idea: 'Avoidance. Before each grant, pretend to grant it and ask: can every request still finish in some order (a safe sequence)? If not, wait — even if the resource is free.',
+                analogy: 'A careful banker only lends money if every customer could still be paid in full.',
+                condition: 'Never enters an unsafe state, so a deadlock can never form.',
+            },
+        };
+
+        const vec = v => `[${v.join(', ')}]`;
+        const fmtRes = v => L_RES.map((r, j) => `${r}:${v[j]}`).join(' ');
+
+        function learnSimulate(mode) {
+            const s = {
+                avail: [...L_TOTAL],
+                alloc: [[0, 0], [0, 0]],
+                plan: L_ACTORS.map(a => [...a.plan]),
+                pc: [0, 0],                         // next step in each plan
+                status: ['ready', 'ready'],         // ready | waiting | done | aborted
+                want: [-1, -1],                     // resource a request is blocked on
+                woke: [false, false],               // was waiting, now retrying
+            };
+            const steps = [];
+            const name = i => `${L_ACTORS[i].id} (${L_ACTORS[i].route})`;
+            const push = (title, text, verdict, rule, extra = {}) => steps.push({
+                title, text, verdict, rule, cycle: false, ...extra,
+                state: JSON.parse(JSON.stringify(s)),
+            });
+
+            // Banker's safety algorithm with a printable trace
+            function safety(avail, alloc) {
+                const work = [...avail], finish = [false, false], lines = [], seq = [];
+                lines.push(`work = Available = ${fmtRes(work)}`);
+                let progress = true;
+                while (progress) {
+                    progress = false;
+                    for (let i = 0; i < 2; i++) {
+                        if (finish[i]) continue;
+                        const need = L_MAX[i].map((m, j) => m - alloc[i][j]);
+                        const fits = need.every((n, j) => n <= work[j]);
+                        lines.push(`${L_ACTORS[i].id}: Need = ${fmtRes(need)} ≤ work? ` +
+                            (fits ? '<span class="ok">yes</span>' : '<span class="no">no</span>'));
+                        if (fits) {
+                            alloc[i].forEach((a, j) => work[j] += a);
+                            finish[i] = true; seq.push(L_ACTORS[i].id); progress = true;
+                            lines.push(`&nbsp;&nbsp;→ ${L_ACTORS[i].id} can finish and return what it holds: work = ${fmtRes(work)}`);
+                        }
+                    }
+                }
+                const safe = finish.every(Boolean);
+                lines.push(safe ? `<span class="ok">SAFE — safe sequence ⟨${seq.join(', ')}⟩</span>`
+                                : `<span class="no">UNSAFE — no order lets everyone finish</span>`);
+                return { safe, lines };
+            }
+
+            function bankerTable(avail, alloc, note) {
+                let t = `<div class="h">${note}</div><table><tr><th></th><th>Max</th><th>Allocation</th><th>Need = Max − Alloc</th></tr>`;
+                for (let i = 0; i < 2; i++) {
+                    const need = L_MAX[i].map((m, j) => m - alloc[i][j]);
+                    t += `<tr><td>${L_ACTORS[i].id}</td><td>${fmtRes(L_MAX[i])}</td><td>${fmtRes(alloc[i])}</td><td>${fmtRes(need)}</td></tr>`;
+                }
+                return t + `</table>Available = ${fmtRes(avail)}<br>`;
+            }
+
+            // --- Intro step
+            const intro = {
+                naive: 'Both requests arrive at the same time. Naive mode will hand out any free resource, with no other check.',
+                lockorder: 'Both requests arrive. Before starting, each handler sorts its plan into the global order DB → CLOCK.',
+                detect: 'Both requests arrive. Resources are handed out like naive mode, but a detector thread is watching in the background.',
+                banker: 'Both requests arrive and declare their maximum claim (the Max vector). Banker\'s will use it in every safety check.',
+            }[mode];
+            let introRule = `<span class="h">Rule:</span> ` + {
+                naive: 'grant if the unit is free; otherwise wait with no time limit.',
+                lockorder: 'grant if the unit is free AND its order index is higher than everything the request already holds.',
+                detect: 'grant if the unit is free. Every 200 ms: find requests that can never finish; abort one.',
+                banker: 'grant only if the unit is free AND the state after granting is SAFE.',
+            }[mode];
+            if (mode === 'banker') introRule += '<br><br>' + bankerTable(s.avail, s.alloc, 'Starting state');
+            push('Two requests arrive', intro, { kind: 'info', label: 'START' }, introRule);
+
+            if (mode === 'lockorder') {
+                s.plan[1] = [0, 1];
+                push('R2 reorders its plan',
+                    'R2 (/upload) wanted CLOCK first, then DB. That goes "downhill" in the global order (CLOCK=4 before DB=3), so lockorder_sort_plan() rewrites it to DB first, then CLOCK. Now both requests take DB first.',
+                    { kind: 'info', label: 'REORDER' },
+                    `<span class="h">Global order:</span> WORKER(0) &lt; BUF(1) &lt; FD(2) &lt; DB(3) &lt; CLOCK(4)<br>` +
+                    `R1 plan: DB(3) → CLOCK(4) <span class="ok">already in order</span><br>` +
+                    `R2 plan: CLOCK(4) → DB(3) <span class="no">out of order</span> → sorted to DB(3) → CLOCK(4)`);
+            }
+
+            // One request asks for its next resource and the strategy decides
+            function attempt(i, retry) {
+                const r = s.plan[i][s.pc[i]];
+                const rn = L_RES[r];
+                const free = s.avail[r] >= 1;
+                s.woke[i] = false;
+                const ask = retry ? `${name(i)} wakes up and asks for ${rn} again.` : `${name(i)} asks for ${rn}.`;
+                let rule = '', grant = false, why = '';
+
+                if (mode === 'naive' || mode === 'detect') {
+                    grant = free;
+                    rule = `<span class="h">${mode === 'naive' ? 'Naive' : 'Detect'} rule:</span> is ${rn} free? ` +
+                        (free ? '<span class="ok">yes → grant</span>' : `<span class="no">no → wait${mode === 'naive' ? ' (forever)' : ' (until granted or aborted)'}</span>`);
+                    why = free ? `${rn} is free, so it is granted.` :
+                        `${rn} is held by the other request, so ${L_ACTORS[i].id} has to wait — while still holding what it already has (hold-and-wait).`;
+                } else if (mode === 'lockorder') {
+                    const held = L_RES.filter((_, j) => s.alloc[i][j] > 0);
+                    const okOrder = held.every(h => L_ORDER[h] < L_ORDER[rn]);
+                    grant = free && okOrder;
+                    rule = `<span class="h">Lock-order rule:</span><br>1. order: ${rn}(${L_ORDER[rn]}) above everything held ` +
+                        `(${held.length ? held.map(h => `${h}(${L_ORDER[h]})`).join(', ') : 'nothing held'})? ` +
+                        (okOrder ? '<span class="ok">yes</span>' : '<span class="no">no → refused</span>') +
+                        `<br>2. is ${rn} free? ` + (free ? '<span class="ok">yes → grant</span>' : '<span class="no">no → wait (max 2 s, then 503)</span>');
+                    why = grant ? `The order is respected and ${rn} is free, so it is granted.` :
+                        `The order is fine, but ${rn} is held by the other request. ${L_ACTORS[i].id} waits — and because it holds nothing "higher", no cycle can form.`;
+                } else {
+                    if (!free) {
+                        rule = `<span class="h">Banker's:</span> is ${rn} free? <span class="no">no → wait</span>`;
+                        why = `${rn} is in use, so ${L_ACTORS[i].id} waits. (No safety check needed: there is nothing to give.)`;
+                    } else {
+                        const tAvail = [...s.avail]; tAvail[r] -= 1;
+                        const tAlloc = s.alloc.map(row => [...row]); tAlloc[i][r] += 1;
+                        const res = safety(tAvail, tAlloc.map(row => [...row]));
+                        grant = res.safe;
+                        rule = `<span class="h">Banker's:</span> ${rn} is free. Pretend to grant it, then run the safety check.<br><br>` +
+                            bankerTable(tAvail, tAlloc, `If we give ${rn} to ${L_ACTORS[i].id}:`) + '<br>' + res.lines.join('<br>') +
+                            '<br><br>' + (grant ? '<span class="ok">→ keep the grant</span>' : '<span class="no">→ undo the grant; ' + L_ACTORS[i].id + ' waits (max 2 s, then 503)</span>');
+                        why = grant ? `Even after this grant, every request can still finish, so it is safe to give ${rn}.` :
+                            `${rn} is FREE, but giving it away would leave a state where nobody is guaranteed to finish. Banker's says "not yet" — this one refusal is what prevents the deadlock.`;
+                    }
+                }
+
+                if (grant) {
+                    s.avail[r] -= 1; s.alloc[i][r] += 1; s.pc[i] += 1;
+                    s.status[i] = 'ready'; s.want[i] = -1;
+                    push(`${L_ACTORS[i].id} gets ${rn}`, `${ask} ${why}`, { kind: 'ok', label: 'GRANTED' }, rule);
+                } else {
+                    s.status[i] = 'waiting'; s.want[i] = r;
+                    push(`${L_ACTORS[i].id} must wait for ${rn}`, `${ask} ${why}`, { kind: 'wait', label: 'WAIT' }, rule);
+                }
+            }
+
+            function finish(i) {
+                const held = L_RES.filter((_, j) => s.alloc[i][j] > 0);
+                for (let j = 0; j < 2; j++) { s.avail[j] += s.alloc[i][j]; s.alloc[i][j] = 0; }
+                s.status[i] = 'done';
+                const woke = [];
+                for (let k = 0; k < 2; k++) if (s.status[k] === 'waiting') { s.status[k] = 'ready'; s.woke[k] = true; woke.push(L_ACTORS[k].id); }
+                push(`${L_ACTORS[i].id} finishes and releases ${held.join(' + ')}`,
+                    `${name(i)} has everything it needs, does its work, sends 200 OK, and returns ${held.join(' and ')}. ` +
+                    (woke.length ? `The condition variable is broadcast, so ${woke.join(', ')} wakes up to try again.` : ''),
+                    { kind: 'ok', label: 'DONE · 200 OK' },
+                    `Released ${held.join(' + ')} → Available = ${fmtRes(s.avail)}<br>pthread_cond_broadcast() wakes every waiter.`);
+            }
+
+            // Round-robin scheduler: R1, R2, R1, R2 … like two threads interleaving
+            let turn = 0;
+            for (let guard = 0; guard < 30; guard++) {
+                const ready = [0, 1].filter(k => s.status[k] === 'ready');
+                if (!ready.length) {
+                    const waiting = [0, 1].filter(k => s.status[k] === 'waiting');
+                    if (!waiting.length) break;
+                    if (mode === 'naive') {
+                        push('DEADLOCK',
+                            'R1 holds DB and waits for CLOCK. R2 holds CLOCK and waits for DB. Each is waiting for the other, and naive mode has no way out: both stay blocked forever, and so do their worker threads. Follow the red arrows — they form a closed loop.',
+                            { kind: 'bad', label: 'DEADLOCK' },
+                            `<span class="h">All four Coffman conditions hold:</span><br>` +
+                            `1. mutual exclusion — 1 DB, 1 CLOCK, one holder each<br>` +
+                            `2. hold-and-wait — each holds one and waits for the other<br>` +
+                            `3. no pre-emption — nothing takes a resource back<br>` +
+                            `4. circular wait — R1 → CLOCK → R2 → DB → R1<br><br>` +
+                            `<span class="no">Nothing will ever change. Only a restart frees them.</span>`, { cycle: true });
+                        break;
+                    }
+                    // detect: the detector thread runs
+                    push('Detector thread runs',
+                        'Both requests are blocked. Every 200 ms the detector thread runs the deadlock-detection algorithm on the Request matrix (what each blocked request is waiting for).',
+                        { kind: 'bad', label: 'DEADLOCK FOUND' },
+                        `<span class="h">Detection algorithm:</span><br>work = Available = ${fmtRes(s.avail)}<br>` +
+                        waiting.map(k => `${L_ACTORS[k].id} holds ${fmtRes(s.alloc[k])}, requests ${L_RES[s.want[k]]}:1 ≤ work? <span class="no">no</span>`).join('<br>') +
+                        `<br>No request can finish → <span class="no">{${waiting.map(k => L_ACTORS[k].id).join(', ')}} are deadlocked</span>`, { cycle: true });
+                    const units = waiting.map(k => s.alloc[k].reduce((a, b) => a + b, 0));
+                    const victim = waiting[waiting.length - 1];   // tie on units held → youngest (arrived last)
+                    const held = L_RES.filter((_, j) => s.alloc[victim][j] > 0);
+                    for (let j = 0; j < 2; j++) { s.avail[j] += s.alloc[victim][j]; s.alloc[victim][j] = 0; }
+                    s.status[victim] = 'aborted'; s.want[victim] = -1;
+                    for (const k of waiting) if (k !== victim) { s.status[k] = 'ready'; s.woke[k] = true; }
+                    push(`Victim: ${L_ACTORS[victim].id} is aborted`,
+                        `To break the cycle, the detector picks a victim: the request holding the fewest units (least work lost). Both hold ${units[0]} unit, so the tie goes to the youngest: ${name(victim)}. It gets 503 Service Unavailable, its ${held.join(' + ')} is taken back, and its partial work is lost.`,
+                        { kind: 'warn', label: 'ABORTED · 503' },
+                        `<span class="h">Victim choice:</span><br>` +
+                        waiting.map((k, n) => `${L_ACTORS[k].id}: holds ${units[n]} unit(s)`).join('<br>') +
+                        `<br>tie → youngest → <span class="no">${L_ACTORS[victim].id}</span><br>` +
+                        `Released ${held.join(' + ')} → Available = ${fmtRes(s.avail)}`);
+                    continue;
+                }
+                // pick the next ready request in round-robin order
+                let i = ready.includes(turn % 2) ? turn % 2 : ready[0];
+                turn = i + 1;
+                if (s.pc[i] === 2) finish(i);
+                else attempt(i, s.woke[i]);
+            }
+
+            const last = steps[steps.length - 1];
+            if (mode !== 'naive') {
+                const out = { lockorder: 'Both requests finished. Taking resources in the same order made a cycle impossible.',
+                              detect: 'R1 finished; R2 was aborted with 503. The server survived, but R2\'s work was wasted.',
+                              banker: 'Both requests finished. Banker\'s refused one unsafe grant, and that was enough to avoid the deadlock.' }[mode];
+                push('Result', out, { kind: mode === 'detect' ? 'warn' : 'ok', label: 'RESULT' },
+                    { lockorder: 'Deadlocks: 0 · aborted: 0 · order violations refused: 0',
+                      detect: 'Deadlocks found: 1 · victims aborted: 1 · successful: 1 of 2',
+                      banker: 'Deadlocks: 0 · aborted: 0 · unsafe grants refused: 1' }[mode]);
+            }
+            return steps;
+        }
+
+        // ------------------------------------------------------------ drawing
+        const learn = { mode: 'naive', steps: [], i: 0, timer: null };
+        const L_VERDICT = {
+            info: ['rgba(56,189,248,0.15)', 'var(--primary)'], ok: ['rgba(52,211,153,0.15)', 'var(--success)'],
+            wait: ['rgba(251,191,36,0.15)', 'var(--warning)'], warn: ['rgba(251,146,60,0.18)', '#fb923c'],
+            bad: ['rgba(248,113,113,0.18)', 'var(--danger)'],
+        };
+        const L_STATUS = {
+            ready: ['Running', '#38bdf8'], waiting: ['Waiting', '#fbbf24'],
+            done: ['Done · 200 OK', '#34d399'], aborted: ['Aborted · 503', '#f87171'],
+        };
+
+        function learnDrawGraph(step) {
+            const s = step.state;
+            const P = { R1: [85, 150], R2: [455, 150], DB: [270, 55], CLOCK: [270, 245] };
+            let svg = `<defs>
+                <marker id="ah-g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#34d399"/></marker>
+                <marker id="ah-y" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#fbbf24"/></marker>
+                <marker id="ah-r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#f87171"/></marker></defs>`;
+            // shorten a line so arrows stop at node edges
+            const edge = (a, b, color, marker, dashed) => {
+                const [x1, y1] = P[a], [x2, y2] = P[b];
+                const dx = x2 - x1, dy = y2 - y1, len = Math.hypot(dx, dy);
+                const s0 = 48 / len, s1 = 50 / len;
+                return `<line x1="${x1 + dx * s0}" y1="${y1 + dy * s0}" x2="${x2 - dx * s1}" y2="${y2 - dy * s1}"
+                    stroke="${color}" stroke-width="3.5" ${dashed ? 'stroke-dasharray="9 7"' : ''} marker-end="url(#${marker})"/>`;
+            };
+            L_ACTORS.forEach((a, i) => {
+                L_RES.forEach((r, j) => {
+                    if (s.alloc[i][j] > 0) svg += step.cycle ? edge(r, a.id, '#f87171', 'ah-r') : edge(r, a.id, '#34d399', 'ah-g');
+                });
+                if (s.status[i] === 'waiting' && s.want[i] >= 0)
+                    svg += step.cycle ? edge(a.id, L_RES[s.want[i]], '#f87171', 'ah-r', true) : edge(a.id, L_RES[s.want[i]], '#fbbf24', 'ah-y', true);
+            });
+            L_RES.forEach((r, j) => {
+                const [x, y] = P[r];
+                const holder = L_ACTORS.findIndex((_, i) => s.alloc[i][j] > 0);
+                const fill = holder >= 0 ? '#1f2937' : '#0f172a';
+                svg += `<rect x="${x - 62}" y="${y - 30}" width="124" height="60" rx="10" fill="${fill}" stroke="${holder >= 0 ? L_ACTORS[holder].color : '#475569'}" stroke-width="2.5"/>
+                    <text x="${x}" y="${y - 4}" text-anchor="middle" fill="#f8fafc" font-size="17" font-weight="700">${r}</text>
+                    <text x="${x}" y="${y + 17}" text-anchor="middle" fill="#94a3b8" font-size="12">${holder >= 0 ? 'held by ' + L_ACTORS[holder].id : 'free'}</text>`;
+            });
+            L_ACTORS.forEach((a, i) => {
+                const [x, y] = P[a.id];
+                const st = L_STATUS[s.status[i]];
+                const faded = s.status[i] === 'done' || s.status[i] === 'aborted';
+                svg += `<g opacity="${faded ? 0.5 : 1}"><circle cx="${x}" cy="${y}" r="44" fill="#0f172a" stroke="${a.color}" stroke-width="3"/>
+                    <text x="${x}" y="${y - 4}" text-anchor="middle" fill="${a.color}" font-size="19" font-weight="800">${a.id}</text>
+                    <text x="${x}" y="${y + 15}" text-anchor="middle" fill="#94a3b8" font-size="11">${a.route}</text></g>
+                    <text x="${x}" y="${y + 66}" text-anchor="middle" fill="${st[1]}" font-size="12" font-weight="700">${st[0]}</text>`;
+            });
+            document.getElementById('learn-svg').innerHTML = svg;
+        }
+
+        function learnRender() {
+            const st = learn.steps[learn.i];
+            const s = st.state;
+            learnDrawGraph(st);
+            document.getElementById('learn-cards').innerHTML = L_ACTORS.map((a, i) => {
+                const chips = s.plan[i].map((r, k) => {
+                    let cls = '';
+                    if (s.alloc[i][r] > 0) cls = 'held';
+                    else if (s.status[i] === 'waiting' && s.want[i] === r) cls = 'wait';
+                    else if (s.status[i] === 'aborted' && k < s.pc[i]) cls = 'lost';
+                    else if (s.status[i] === 'done') cls = 'held';
+                    return `<span class="learn-chip ${cls}">${k + 1}. ${L_RES[r]}</span>`;
+                }).join('→ ');
+                const stat = L_STATUS[s.status[i]];
+                return `<div class="learn-card" style="border-left: 3px solid ${a.color};">
+                    <div class="who" style="color: ${a.color};">${a.id} · POST ${a.route}</div>
+                    <div>${chips}</div>
+                    <span class="learn-status" style="color: ${stat[1]}; border: 1px solid ${stat[1]};">${stat[0]}</span></div>`;
+            }).join('');
+            const [bg, fg] = L_VERDICT[st.verdict.kind];
+            document.getElementById('learn-verdict').innerHTML =
+                `<span class="learn-verdict" style="background: ${bg}; color: ${fg}; border: 1px solid ${fg};">${st.verdict.label}</span>`;
+            document.getElementById('learn-title').innerText = st.title;
+            document.getElementById('learn-text').innerText = st.text;
+            document.getElementById('learn-rule').innerHTML = st.rule;
+            document.getElementById('learn-counter').innerText = `Step ${learn.i + 1} / ${learn.steps.length}`;
+            document.getElementById('learn-steps').innerHTML = learn.steps.map((x, k) =>
+                `<li class="${k === learn.i ? 'current' : k > learn.i ? 'future' : ''}" onclick="learnGo(${k})">
+                    <span class="n">${k + 1}.</span><span>${x.title}</span></li>`).join('');
+            const cur = document.querySelector('#learn-steps li.current');
+            if (cur) cur.scrollIntoView({ block: 'nearest' });
+        }
+
+        function learnSetMode(mode) {
+            learnStop();
+            learn.mode = mode;
+            learn.steps = learnSimulate(mode);
+            learn.i = 0;
+            document.querySelectorAll('.learn-mode').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+            const t = L_INTRO[mode];
+            document.getElementById('learn-intro').innerHTML =
+                `<div><b>The idea</b>${t.idea}</div><div><b>Kitchen analogy</b>${t.analogy}</div><div><b>Coffman condition</b>${t.condition}</div>`;
+            learnRender();
+        }
+
+        function learnGo(k) {
+            learn.i = Math.max(0, Math.min(learn.steps.length - 1, k));
+            learnRender();
+            if (learn.i === learn.steps.length - 1) learnStop();
+        }
+
+        function learnStop() {
+            clearInterval(learn.timer); learn.timer = null;
+            const b = document.getElementById('learn-play');
+            if (b) b.innerText = '▶ Auto-play';
+        }
+
+        function learnTogglePlay() {
+            if (learn.timer) return learnStop();
+            if (learn.i === learn.steps.length - 1) learn.i = -1;
+            document.getElementById('learn-play').innerText = '⏸ Pause';
+            learnGo(learn.i + 1);
+            learn.timer = setInterval(() => learnGo(learn.i + 1), 3500);
+        }
+
+        document.addEventListener('keydown', e => {
+            if (document.getElementById('tab-learn').classList.contains('hidden')) return;
+            if (e.key === 'ArrowRight') learnGo(learn.i + 1);
+            if (e.key === 'ArrowLeft') learnGo(learn.i - 1);
+        });
+
+        learnSetMode('naive');
     </script>
 </body>
 </html>
